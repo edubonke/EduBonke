@@ -1,0 +1,13 @@
+{
+  "name": "EduBonke College Management Platform",
+  "short_name": "EduBonke",
+  "description": "Multi-college administration and academic operations for South African private colleges.",
+  "start_url": "./portal/",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f3ec",
+  "theme_color": "#087f75",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

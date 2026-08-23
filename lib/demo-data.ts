@@ -84,6 +84,7 @@ export function createDemoWorkspace(): WorkspaceData {
     attendance_sessions: [
       { id: "attendance-session-1", institution_id, class_id: "class-ts-a", timetable_entry_id: "timetable-1", session_date: "2026-08-12", topic: "Fault-finding workflow", status: "closed" },
       { id: "attendance-session-2", institution_id, class_id: "class-euc-a", session_date: "2026-08-13", topic: "Mail merge", status: "open" },
+      { id: "attendance-session-3", institution_id, class_id: "class-ts-a", timetable_entry_id: "timetable-2", session_date: "2026-08-21", topic: "Authenticated QR register demonstration", status: "open", check_in_enabled: false },
     ],
     attendance_records: [
       { id: "attendance-1", institution_id, attendance_session_id: "attendance-session-1", student_id: "student-1", status: "present", note: "Completed the demonstration activity." },

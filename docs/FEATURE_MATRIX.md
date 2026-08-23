@@ -1,4 +1,4 @@
-# EduBonke v1.2 Feature Matrix
+# EduBonke v1.3 Feature Matrix
 
 This matrix describes what the R0 prototype actually does. “Working” means the feature has a user interface, database model and relevant row-level access controls after the supplied Supabase migration is installed.
 
@@ -12,7 +12,7 @@ This matrix describes what the R0 prototype actually does. “Working” means t
 | Student records | Working | Registration, controlled CSV upsert, status changes, enrolments, class links and student account links | Synthetic data only on the R0 deployment |
 | Workplace learning | Working | Student-to-employer and authorised supervisor placements with scoped supervisor access | No employer contracting or payroll functions |
 | Timetable | Working | Shared dated sessions, times, venues and class/module links | No calendar-provider synchronisation |
-| Attendance | Working | Sessions, per-student status and notes | No biometric or geolocation attendance |
+| Attendance | Working | Sessions, manual corrections and short-lived QR check-in restricted to a signed-in, linked and actively enrolled student | A QR check-in reduces register administration but does not by itself prove physical presence; no biometric or geolocation tracking |
 | Assessment | Working | Assessment plans, scores, outcomes and assessor feedback | No automatic academic judgement |
 | POE and moderation | Working | Private uploads, signed downloads, evidence review and separate moderation decisions | No malware scanning on the free prototype |
 | Finance | Working | Rand invoices, payments, balances and funding administration | Not statutory accounting, a payment gateway or official NSFAS integration |

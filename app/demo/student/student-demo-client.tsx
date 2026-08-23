@@ -59,6 +59,27 @@ export default function StudentDemoClient() {
     setNotice("The student demonstration has been reset.");
   }
 
+  function simulateAttendanceScan() {
+    const sessionId = "attendance-session-3";
+    if (attendance.some((row) => row.attendance_session_id === sessionId)) {
+      setNotice("This simulated signed-in student has already checked in for the QR register.");
+      return;
+    }
+    const next: Row = {
+      id: crypto.randomUUID(),
+      institution_id: "demo-mhlabeni-college",
+      attendance_session_id: sessionId,
+      student_id: studentId,
+      status: "present",
+      note: "Authenticated student QR check-in — synthetic demonstration",
+      check_in_method: "qr",
+      checked_in_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    };
+    setData((current) => ({ ...current, attendance_records: [next, ...(current.attendance_records ?? [])] }));
+    setNotice("Demonstration attendance recorded as Present. In live mode, Supabase first verifies the signed-in student and active class enrolment.");
+  }
+
   function addEvidence(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -139,7 +160,7 @@ export default function StudentDemoClient() {
       <div className="portal-content"><StudentCard title="My timetable" eyebrow="UPCOMING CLASSES"><StudentList rows={timetable} empty="No classes are scheduled." render={(row) => <><div className="record-between"><b>{text(row.title)}</b><StudentStatus value={row.status} /></div><small>{formatDate(row.session_date)} · {text(row.start_time)}–{text(row.end_time)} · {text(row.venue)}</small></>} /></StudentCard></div>
     );
     if (view === "attendance") return (
-      <div className="portal-content"><section className="metric-row student-metric-row"><article><small>Recorded sessions</small><strong>{attendance.length}</strong><span>Your linked attendance records</span></article><article><small>Attendance rate</small><strong>{attendanceRate}%</strong><span>Present and late sessions</span></article></section><StudentCard title="Attendance history" eyebrow="MY REGISTER"><StudentList rows={attendance} empty="No attendance has been recorded." render={(row) => { const session = rows(data, "attendance_sessions").find((item) => item.id === row.attendance_session_id); return <><div className="record-between"><b>{text(session?.topic)}</b><StudentStatus value={row.status} /></div><small>{formatDate(session?.session_date)}{row.note ? ` · ${text(row.note)}` : ""}</small></>; }} /></StudentCard></div>
+      <div className="portal-content"><section className="metric-row student-metric-row"><article><small>Recorded sessions</small><strong>{attendance.length}</strong><span>Your linked attendance records</span></article><article><small>Attendance rate</small><strong>{attendanceRate}%</strong><span>Present and late sessions</span></article></section><div className="portal-card qr-student-card"><div className="card-heading"><div><small>AUTHENTICATED STUDENT ACTION</small><h2>Scan register QR</h2></div></div><p>In live mode, you must already be signed in before the scanner opens. Supabase then confirms that your account is linked and actively enrolled in the facilitator’s class.</p><button className="primary-action" onClick={simulateAttendanceScan}>Simulate signed-in QR scan</button><p className="scope-note">This demonstration writes only to this browser tab and does not use the camera, an account or the database.</p></div><StudentCard title="Attendance history" eyebrow="MY REGISTER"><StudentList rows={attendance} empty="No attendance has been recorded." render={(row) => { const session = rows(data, "attendance_sessions").find((item) => item.id === row.attendance_session_id); return <><div className="record-between"><b>{text(session?.topic)}</b><StudentStatus value={row.status} /></div><small>{formatDate(session?.session_date)}{row.note ? ` · ${text(row.note)}` : ""}</small></>; }} /></StudentCard></div>
     );
     if (view === "assessments") return (
       <div className="portal-content"><StudentCard title="Assessments and results" eyebrow="MY ACADEMIC PROGRESS"><StudentList rows={assessments} empty="No assessments are published." render={(row) => { const result = results.find((item) => item.assessment_id === row.id); return <><div className="record-between"><b>{text(row.title)}</b><StudentStatus value={result?.outcome ?? row.status} /></div><small>{human(row.assessment_type)} · Due {formatDate(row.due_date)} · {text(row.maximum_marks)} marks</small>{result && <p>{result.score != null ? `Score: ${text(result.score)}% · ` : ""}{text(result.feedback)}</p>}</>; }} /></StudentCard></div>

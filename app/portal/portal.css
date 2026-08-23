@@ -154,6 +154,29 @@
 .student-action-form textarea { min-height: 88px; padding-top: 10px; resize: vertical; }
 .student-new-chip { padding: 4px 8px; border-radius: 999px; background: #fff0d7; color: #91621c; font-size: 8px; font-weight: 800; }
 .student-inline-button { min-height: 34px; margin-top: 11px; border: 1px solid #bdd2cc; border-radius: 8px; padding: 0 11px; background: white; color: #087f75; font-size: 9px; font-weight: 700; cursor: pointer; }
+.qr-attendance-card form { display: grid; gap: 14px; margin-top: 18px; }
+.qr-attendance-card form label, .qr-fallback label { display: grid; gap: 7px; color: #43595e; font-size: 10px; font-weight: 700; }
+.qr-attendance-card select, .qr-fallback input { width: 100%; min-height: 44px; border: 1px solid #cbd6d2; border-radius: 9px; padding: 0 11px; background: #fbfcfa; color: #173138; font: inherit; }
+.qr-display { margin-top: 18px; display: grid; justify-items: center; gap: 10px; padding: 18px; border: 1px solid #d9e3df; border-radius: 15px; background: #f7faf8; text-align: center; }
+.qr-display > b { color: #173138; font-size: 12px; }
+.qr-display img { width: min(100%, 320px); height: auto; padding: 8px; border-radius: 12px; background: white; }
+.qr-display > strong { color: #087f75; font-size: 26px; font-variant-numeric: tabular-nums; }
+.qr-display > span { color: #64797c; font-size: 9px; line-height: 1.5; }
+.qr-expired { width: min(100%, 320px); min-height: 180px; display: grid; place-items: center; border-radius: 12px; background: #e8edeb; color: #6a7c7f; font-weight: 800; }
+.qr-actions { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.qr-actions button { min-height: 42px; border: 1px solid #bdd2cc; border-radius: 8px; background: white; color: #087f75; font-size: 9px; font-weight: 800; cursor: pointer; }
+.qr-message { margin: 14px 0 0; padding: 11px 13px; border-radius: 9px; background: #fff4df; color: #825a18 !important; font-size: 10px; line-height: 1.55; }
+.qr-message.success { background: #e4f5ef; color: #08695f !important; }
+.qr-student-card > p { max-width: 760px; color: #64797c; font-size: 11px; line-height: 1.65; }
+.qr-student-card > .primary-action { width: fit-content; margin-top: 14px; }
+.qr-camera { width: min(100%, 540px); margin-top: 16px; display: grid; gap: 8px; }
+.qr-camera video { width: 100%; min-height: 240px; border-radius: 14px; background: #0d2026; object-fit: cover; }
+.qr-camera span { color: #65797d; font-size: 9px; }
+.qr-fallback { max-width: 540px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #e1e7e4; }
+.qr-fallback summary { color: #087f75; font-size: 10px; font-weight: 800; cursor: pointer; }
+.qr-fallback form { display: grid; gap: 11px; margin-top: 12px; }
+.attendance-check-in-page .brand { width: fit-content; margin-bottom: 28px; }
+.attendance-check-in-page .qr-message { max-width: 680px; font-size: 12px; }
 
 @media (max-width: 1180px) {
   .feature-grid.three, .report-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -187,4 +210,6 @@
   .configuration-page > div, .onboarding-page > section { padding: 28px 19px; }
   .student-detail-grid { grid-template-columns: 1fr; }
   .student-detail-grid > span:nth-child(even) { padding-left: 0; border-left: 0; }
+  .qr-actions { grid-template-columns: 1fr; }
+  .qr-camera video { min-height: 190px; }
 }

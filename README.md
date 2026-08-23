@@ -1,6 +1,6 @@
 # EduBonke College Management Platform
 
-EduBonke is a multi-tenant administration and academic operations platform designed for South African private-college workflows. Version 1.2 is a working, synthetic-data prototype that can run at R0 using GitHub Pages, with Supabase Free available for connected multi-device testing.
+EduBonke is a multi-tenant administration and academic operations platform designed for South African private-college workflows. Version 1.3 is a working, synthetic-data prototype that can run at R0 using GitHub Pages, with Supabase Free available for connected multi-device testing.
 
 ## Interactive demo
 
@@ -25,7 +25,7 @@ Neither demo needs an account, Supabase project or environment variables. Both l
 - Campuses, academic periods, programmes, modules and classes
 - Applications, admissions decisions, student records and enrolments
 - Controlled student CSV imports, student-account links and workplace placements
-- Shared timetables, attendance sessions and attendance records
+- Shared timetables, attendance sessions, manual registers and authenticated student QR check-in
 - Formative, summative, practical, POE and workplace assessments
 - Competence outcomes, moderation status and private evidence uploads
 - Invoices, payments, balances and bursary/NSFAS administrative tracking

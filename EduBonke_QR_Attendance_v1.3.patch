@@ -1,0 +1,864 @@
+diff --git a/README.md b/README.md
+index abe7b86..84b24c0 100644
+--- a/README.md
++++ b/README.md
+@@ -1,6 +1,6 @@
+ # EduBonke College Management Platform
+ 
+-EduBonke is a multi-tenant administration and academic operations platform designed for South African private-college workflows. Version 1.2 is a working, synthetic-data prototype that can run at R0 using GitHub Pages, with Supabase Free available for connected multi-device testing.
++EduBonke is a multi-tenant administration and academic operations platform designed for South African private-college workflows. Version 1.3 is a working, synthetic-data prototype that can run at R0 using GitHub Pages, with Supabase Free available for connected multi-device testing.
+ 
+ ## Interactive demo
+ 
+@@ -25,7 +25,7 @@ Neither demo needs an account, Supabase project or environment variables. Both l
+ - Campuses, academic periods, programmes, modules and classes
+ - Applications, admissions decisions, student records and enrolments
+ - Controlled student CSV imports, student-account links and workplace placements
+-- Shared timetables, attendance sessions and attendance records
++- Shared timetables, attendance sessions, manual registers and authenticated student QR check-in
+ - Formative, summative, practical, POE and workplace assessments
+ - Competence outcomes, moderation status and private evidence uploads
+ - Invoices, payments, balances and bursary/NSFAS administrative tracking
+diff --git a/app/attendance/check-in/page.tsx b/app/attendance/check-in/page.tsx
+new file mode 100644
+index 0000000..174d1c8
+--- /dev/null
++++ b/app/attendance/check-in/page.tsx
+@@ -0,0 +1,57 @@
++"use client";
++
++import Link from "next/link";
++import { useEffect, useState } from "react";
++import BrandLogo from "../../brand";
++import { getSupabase, isSupabaseConfigured } from "../../../lib/supabase";
++
++type State = "checking" | "signed-out" | "success" | "error";
++
++export default function AttendanceCheckInPage() {
++  const [state, setState] = useState<State>("checking");
++  const [message, setMessage] = useState("Verifying your signed-in student account…");
++
++  useEffect(() => {
++    let active = true;
++    async function checkIn() {
++      try {
++        if (!isSupabaseConfigured) throw new Error("The Supabase backend is not configured.");
++        const token = new URLSearchParams(location.search).get("token") ?? "";
++        if (!/^[0-9a-f]{48}$/i.test(token)) throw new Error("The attendance QR is invalid.");
++        const supabase = getSupabase();
++        const { data: authData, error: authError } = await supabase.auth.getUser();
++        if (authError || !authData.user) {
++          if (active) { setState("signed-out"); setMessage("You must sign in to the student portal before scanning the attendance QR. No attendance was recorded."); }
++          return;
++        }
++        const { data, error } = await supabase.rpc("check_in_attendance", { p_token: token });
++        if (error) throw error;
++        const row = (data as Array<Record<string, unknown>> | null)?.[0] ?? {};
++        if (active) {
++          setState("success");
++          setMessage(`Attendance recorded as ${String(row.attendance_status ?? "present").replaceAll("_", " ")} for ${String(row.session_topic ?? "this session")}.`);
++        }
++      } catch (error) {
++        if (active) { setState("error"); setMessage(errorMessage(error)); }
++      }
++    }
++    void checkIn();
++    return () => { active = false; };
++  }, []);
++
++  return (
++    <main className="configuration-page attendance-check-in-page">
++      <div>
++        <Link className="brand" href="/" aria-label="EduBonke home"><BrandLogo /></Link>
++        <p className="eyebrow-text">Authenticated attendance</p>
++        <h1>{state === "success" ? "You are checked in." : state === "signed-out" ? "Sign in before scanning." : state === "error" ? "Check-in unsuccessful." : "Checking your register…"}</h1>
++        <p className={`qr-message ${state === "success" ? "success" : ""}`} role="status">{message}</p>
++        {state === "signed-out" ? <><p>Sign in first, then return to Attendance and scan the facilitator’s QR again.</p><Link className="button" href="/login">Sign in to EduBonke</Link></> : <Link className="button" href="/portal">Return to my portal</Link>}
++      </div>
++    </main>
++  );
++}
++
++function errorMessage(error: unknown) {
++  return error instanceof Error ? error.message : typeof error === "object" && error && "message" in error ? String(error.message) : "The attendance request could not be completed.";
++}
+diff --git a/app/demo/student/student-demo-client.tsx b/app/demo/student/student-demo-client.tsx
+index 754f90e..1625246 100644
+--- a/app/demo/student/student-demo-client.tsx
++++ b/app/demo/student/student-demo-client.tsx
+@@ -59,6 +59,27 @@ export default function StudentDemoClient() {
+     setNotice("The student demonstration has been reset.");
+   }
+ 
++  function simulateAttendanceScan() {
++    const sessionId = "attendance-session-3";
++    if (attendance.some((row) => row.attendance_session_id === sessionId)) {
++      setNotice("This simulated signed-in student has already checked in for the QR register.");
++      return;
++    }
++    const next: Row = {
++      id: crypto.randomUUID(),
++      institution_id: "demo-mhlabeni-college",
++      attendance_session_id: sessionId,
++      student_id: studentId,
++      status: "present",
++      note: "Authenticated student QR check-in — synthetic demonstration",
++      check_in_method: "qr",
++      checked_in_at: new Date().toISOString(),
++      created_at: new Date().toISOString(),
++    };
++    setData((current) => ({ ...current, attendance_records: [next, ...(current.attendance_records ?? [])] }));
++    setNotice("Demonstration attendance recorded as Present. In live mode, Supabase first verifies the signed-in student and active class enrolment.");
++  }
++
+   function addEvidence(event: React.FormEvent<HTMLFormElement>) {
+     event.preventDefault();
+     const form = event.currentTarget;
+@@ -139,7 +160,7 @@ export default function StudentDemoClient() {
+       <div className="portal-content"><StudentCard title="My timetable" eyebrow="UPCOMING CLASSES"><StudentList rows={timetable} empty="No classes are scheduled." render={(row) => <><div className="record-between"><b>{text(row.title)}</b><StudentStatus value={row.status} /></div><small>{formatDate(row.session_date)} · {text(row.start_time)}–{text(row.end_time)} · {text(row.venue)}</small></>} /></StudentCard></div>
+     );
+     if (view === "attendance") return (
+-      <div className="portal-content"><section className="metric-row student-metric-row"><article><small>Recorded sessions</small><strong>{attendance.length}</strong><span>Your linked attendance records</span></article><article><small>Attendance rate</small><strong>{attendanceRate}%</strong><span>Present and late sessions</span></article></section><StudentCard title="Attendance history" eyebrow="MY REGISTER"><StudentList rows={attendance} empty="No attendance has been recorded." render={(row) => { const session = rows(data, "attendance_sessions").find((item) => item.id === row.attendance_session_id); return <><div className="record-between"><b>{text(session?.topic)}</b><StudentStatus value={row.status} /></div><small>{formatDate(session?.session_date)}{row.note ? ` · ${text(row.note)}` : ""}</small></>; }} /></StudentCard></div>
++      <div className="portal-content"><section className="metric-row student-metric-row"><article><small>Recorded sessions</small><strong>{attendance.length}</strong><span>Your linked attendance records</span></article><article><small>Attendance rate</small><strong>{attendanceRate}%</strong><span>Present and late sessions</span></article></section><div className="portal-card qr-student-card"><div className="card-heading"><div><small>AUTHENTICATED STUDENT ACTION</small><h2>Scan register QR</h2></div></div><p>In live mode, you must already be signed in before the scanner opens. Supabase then confirms that your account is linked and actively enrolled in the facilitator’s class.</p><button className="primary-action" onClick={simulateAttendanceScan}>Simulate signed-in QR scan</button><p className="scope-note">This demonstration writes only to this browser tab and does not use the camera, an account or the database.</p></div><StudentCard title="Attendance history" eyebrow="MY REGISTER"><StudentList rows={attendance} empty="No attendance has been recorded." render={(row) => { const session = rows(data, "attendance_sessions").find((item) => item.id === row.attendance_session_id); return <><div className="record-between"><b>{text(session?.topic)}</b><StudentStatus value={row.status} /></div><small>{formatDate(session?.session_date)}{row.note ? ` · ${text(row.note)}` : ""}</small></>; }} /></StudentCard></div>
+     );
+     if (view === "assessments") return (
+       <div className="portal-content"><StudentCard title="Assessments and results" eyebrow="MY ACADEMIC PROGRESS"><StudentList rows={assessments} empty="No assessments are published." render={(row) => { const result = results.find((item) => item.assessment_id === row.id); return <><div className="record-between"><b>{text(row.title)}</b><StudentStatus value={result?.outcome ?? row.status} /></div><small>{human(row.assessment_type)} · Due {formatDate(row.due_date)} · {text(row.maximum_marks)} marks</small>{result && <p>{result.score != null ? `Score: ${text(result.score)}% · ` : ""}{text(result.feedback)}</p>}</>; }} /></StudentCard></div>
+diff --git a/app/portal/attendance-qr.tsx b/app/portal/attendance-qr.tsx
+new file mode 100644
+index 0000000..6ee8e8a
+--- /dev/null
++++ b/app/portal/attendance-qr.tsx
+@@ -0,0 +1,201 @@
++"use client";
++
++import { BrowserQRCodeReader } from "@zxing/browser";
++import Image from "next/image";
++import QRCode from "qrcode";
++import { useCallback, useEffect, useRef, useState } from "react";
++import { getSupabase } from "../../lib/supabase";
++
++type SessionOption = { id: string; label: string; status: string };
++type ActiveQr = { sessionId: string; topic: string; url: string; expiresAt: string; demo: boolean };
++type RpcRow = Record<string, unknown>;
++
++export function StaffAttendanceQr({
++  sessions,
++  demoMode,
++  onRefresh,
++}: {
++  sessions: SessionOption[];
++  demoMode: boolean;
++  onRefresh(): Promise<void>;
++}) {
++  const [activeQr, setActiveQr] = useState<ActiveQr | null>(null);
++  const [qrImage, setQrImage] = useState("");
++  const [remaining, setRemaining] = useState(0);
++  const [busy, setBusy] = useState(false);
++  const [message, setMessage] = useState("");
++
++  useEffect(() => {
++    if (!activeQr) return;
++    let current = true;
++    void QRCode.toDataURL(activeQr.url, {
++      width: 320,
++      margin: 2,
++      errorCorrectionLevel: "M",
++      color: { dark: "#132a32", light: "#ffffff" },
++    }).then((image) => { if (current) setQrImage(image); }).catch(() => { if (current) setMessage("The QR image could not be generated."); });
++    return () => { current = false; };
++  }, [activeQr]);
++
++  useEffect(() => {
++    if (!activeQr) return;
++    const update = () => setRemaining(Math.max(0, Math.ceil((new Date(activeQr.expiresAt).getTime() - Date.now()) / 1000)));
++    update();
++    const timer = window.setInterval(update, 1000);
++    return () => window.clearInterval(timer);
++  }, [activeQr]);
++
++  async function start(event: React.FormEvent<HTMLFormElement>) {
++    event.preventDefault();
++    const form = event.currentTarget;
++    const sessionId = String(new FormData(form).get("session_id") ?? "");
++    const selected = sessions.find((session) => session.id === sessionId);
++    if (!selected) return;
++    setBusy(true); setMessage("");
++    try {
++      let token: string;
++      let expiresAt: string;
++      let topic = selected.label;
++      if (demoMode) {
++        token = crypto.randomUUID().replaceAll("-", "").slice(0, 48).padEnd(48, "0");
++        expiresAt = new Date(Date.now() + 5 * 60_000).toISOString();
++      } else {
++        const { data, error } = await getSupabase().rpc("start_attendance_qr", { p_session_id: sessionId, p_valid_minutes: 5 });
++        if (error) throw error;
++        const row = ((data as RpcRow[] | null)?.[0] ?? {}) as RpcRow;
++        token = String(row.check_in_token ?? "");
++        expiresAt = String(row.check_in_expires_at ?? "");
++        topic = String(row.session_topic ?? selected.label);
++      }
++      const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
++      const url = `${location.origin}${basePath}/attendance/check-in/?token=${encodeURIComponent(token)}`;
++      setQrImage("");
++      setActiveQr({ sessionId, topic, url, expiresAt, demo: demoMode });
++      setMessage(demoMode ? "Demonstration QR created. It does not write attendance." : "Authenticated student check-in is open for five minutes.");
++      await onRefresh();
++    } catch (error) {
++      setMessage(errorMessage(error));
++    } finally { setBusy(false); }
++  }
++
++  async function stop() {
++    if (!activeQr) return;
++    setBusy(true); setMessage("");
++    try {
++      if (!demoMode) {
++        const { error } = await getSupabase().rpc("stop_attendance_qr", { p_session_id: activeQr.sessionId });
++        if (error) throw error;
++      }
++      setActiveQr(null);
++      setMessage("QR check-in closed.");
++      await onRefresh();
++    } catch (error) { setMessage(errorMessage(error)); }
++    finally { setBusy(false); }
++  }
++
++  return (
++    <section className="portal-card form-card qr-attendance-card">
++      <small>AUTHENTICATED STUDENT ACTION</small>
++      <h2>Display attendance QR</h2>
++      <p>Only a student who is already signed in, linked and enrolled in this class can check in.</p>
++      <form onSubmit={start}>
++        <label>Open attendance session
++          <select name="session_id" defaultValue="" required>
++            <option value="">Select an open register</option>
++            {sessions.filter((session) => session.status === "open").map((session) => <option key={session.id} value={session.id}>{session.label}</option>)}
++          </select>
++        </label>
++        <button className="primary-action" disabled={busy}>{busy ? "Please wait…" : activeQr ? "Replace QR" : "Start five-minute QR"}</button>
++      </form>
++      {message && <p className="qr-message" role="status">{message}</p>}
++      {activeQr && <div className="qr-display">
++        <b>{activeQr.topic}</b>
++        {qrImage && remaining > 0 ? <Image src={qrImage} alt="Attendance QR code" width={320} height={320} unoptimized /> : <div className="qr-expired">QR expired</div>}
++        <strong>{remaining > 0 ? `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}` : "Expired"}</strong>
++        <span>{activeQr.demo ? "Synthetic staff demonstration" : "Students must scan from their signed-in EduBonke portal"}</span>
++        <div className="qr-actions">
++          <button type="button" onClick={() => void onRefresh()}>Refresh check-ins</button>
++          <button type="button" onClick={() => void stop()} disabled={busy}>Close QR</button>
++        </div>
++      </div>}
++    </section>
++  );
++}
++
++export function StudentAttendanceScanner({ onRecorded }: { onRecorded(): Promise<void> }) {
++  const videoRef = useRef<HTMLVideoElement>(null);
++  const [scanning, setScanning] = useState(false);
++  const [busy, setBusy] = useState(false);
++  const [message, setMessage] = useState("");
++  const [successful, setSuccessful] = useState(false);
++
++  const record = useCallback(async (scannedValue: string) => {
++    setBusy(true); setMessage(""); setSuccessful(false);
++    try {
++      const token = attendanceToken(scannedValue);
++      const supabase = getSupabase();
++      const { data: authData, error: authError } = await supabase.auth.getUser();
++      if (authError || !authData.user) throw new Error("You must be signed in before scanning the attendance QR.");
++      const { data, error } = await supabase.rpc("check_in_attendance", { p_token: token });
++      if (error) throw error;
++      const row = ((data as RpcRow[] | null)?.[0] ?? {}) as RpcRow;
++      const status = String(row.attendance_status ?? "present").replaceAll("_", " ");
++      const topic = String(row.session_topic ?? "attendance session");
++      setSuccessful(true);
++      setMessage(`Attendance recorded as ${status} for ${topic}.`);
++      await onRecorded();
++    } catch (error) {
++      setMessage(errorMessage(error));
++    } finally { setBusy(false); setScanning(false); }
++  }, [onRecorded]);
++
++  useEffect(() => {
++    if (!scanning || !videoRef.current) return;
++    const reader = new BrowserQRCodeReader();
++    let stopped = false;
++    let controls: { stop(): void } | null = null;
++    void reader.decodeFromVideoDevice(undefined, videoRef.current, (result, _error, callbackControls) => {
++      controls = callbackControls;
++      if (result && !stopped) {
++        stopped = true;
++        callbackControls.stop();
++        void record(result.getText());
++      }
++    }).then((activeControls) => { controls = activeControls; }).catch((error) => {
++      setScanning(false);
++      setMessage(`Camera scanning could not start: ${errorMessage(error)}`);
++    });
++    return () => { stopped = true; controls?.stop(); };
++  }, [record, scanning]);
++
++  async function pasteLink(event: React.FormEvent<HTMLFormElement>) {
++    event.preventDefault();
++    const form = event.currentTarget;
++    const value = String(new FormData(form).get("attendance_url") ?? "");
++    await record(value);
++    form.reset();
++  }
++
++  return (
++    <section className="portal-card qr-student-card">
++      <div className="card-heading"><div><small>MY REGISTER</small><h2>Scan register QR</h2></div></div>
++      <p>You must already be signed in. The camera scans only an EduBonke attendance URL and no attendance is written until Supabase verifies your account and class enrolment.</p>
++      <button className="primary-action" disabled={busy} onClick={() => setScanning((value) => !value)}>{scanning ? "Stop camera" : busy ? "Checking attendance…" : "Open QR scanner"}</button>
++      {scanning && <div className="qr-camera"><video ref={videoRef} muted playsInline /><span>Point the camera at the facilitator’s EduBonke QR code.</span></div>}
++      <details className="qr-fallback"><summary>Camera unavailable?</summary><form onSubmit={pasteLink}><label>Paste the EduBonke attendance URL<input name="attendance_url" type="url" required /></label><button className="primary-action" disabled={busy}>Check in securely</button></form></details>
++      {message && <p className={`qr-message ${successful ? "success" : ""}`} role="status">{message}</p>}
++    </section>
++  );
++}
++
++export function attendanceToken(scannedValue: string) {
++  const url = new URL(scannedValue.trim());
++  if (url.origin !== location.origin || !url.pathname.endsWith("/attendance/check-in/")) throw new Error("Scan the EduBonke attendance QR displayed by your facilitator.");
++  const token = url.searchParams.get("token") ?? "";
++  if (!/^[0-9a-f]{48}$/i.test(token)) throw new Error("The attendance QR is invalid.");
++  return token;
++}
++
++function errorMessage(error: unknown) {
++  return error instanceof Error ? error.message : typeof error === "object" && error && "message" in error ? String(error.message) : "The attendance request could not be completed.";
++}
+diff --git a/app/portal/portal-client.tsx b/app/portal/portal-client.tsx
+index c4df031..60f94e3 100644
+--- a/app/portal/portal-client.tsx
++++ b/app/portal/portal-client.tsx
+@@ -7,6 +7,7 @@ import { getSupabase, isSupabaseConfigured } from "../../lib/supabase";
+ import { downloadCsv, formatDate, human, money, navigation, type InstitutionRole, type Membership, type WorkspaceData } from "../../lib/platform";
+ import { createDemoWorkspace, demoMemberships, demoUser } from "../../lib/demo-data";
+ import BrandLogo, { BrandMark } from "../brand";
++import { StaffAttendanceQr, StudentAttendanceScanner } from "./attendance-qr";
+ 
+ type Row = Record<string, unknown>;
+ type Notice = { type: "success" | "error"; text: string } | null;
+@@ -22,6 +23,7 @@ const workspaceTables = [
+ 
+ const academicWriters = new Set<InstitutionRole>(["college_admin", "academic_manager", "lecturer", "assessor", "moderator"]);
+ const academicManagers = new Set<InstitutionRole>(["college_admin", "academic_manager"]);
++const attendanceManagers = new Set<InstitutionRole>(["college_admin", "academic_manager", "lecturer"]);
+ const financeWriters = new Set<InstitutionRole>(["college_admin", "finance_officer"]);
+ const privacyManagers = new Set<InstitutionRole>(["college_admin", "academic_manager"]);
+ 
+@@ -300,8 +302,17 @@ function TimetablePanel(props: PanelProps) {
+ }
+ 
+ function AttendancePanel(props: PanelProps) {
+-  const sessions = getRows(props.data, "attendance_sessions"); const students = getRows(props.data, "students"); const records = getRows(props.data, "attendance_records"); const classes = getRows(props.data, "classes"); const timetable = getRows(props.data, "timetable_entries"); const canWrite = academicWriters.has(props.role);
+-  return <div className="portal-content">{canWrite && <div className="feature-grid two"><FormCard title="Open an attendance session" intro="Create the register for a class date."><form onSubmit={(event) => void formInsert(event, props.actions, "attendance_sessions", { status: "open" }, "Attendance session opened.")}><SelectField label="Class" name="class_id" options={classes} optionLabel={(row) => text(row.name)} /><SelectField label="Timetable entry (optional)" name="timetable_entry_id" options={timetable} optionLabel={(row) => `${formatDate(row.session_date)} · ${text(row.title)}`} optional /><Field label="Session date" name="session_date" type="date" /><Field label="Topic" name="topic" /><Submit busy={props.busy}>Open register</Submit></form></FormCard><FormCard title="Mark attendance" intro="Submitting the same student and session updates the record."><form onSubmit={(event) => void formUpsert(event, props.actions, "attendance_records", "attendance_session_id,student_id", "Attendance saved.")}><SelectField label="Attendance session" name="attendance_session_id" options={sessions} optionLabel={(row) => `${formatDate(row.session_date)} · ${text(row.topic)}`} /><SelectField label="Student" name="student_id" options={students} optionLabel={(row) => `${text(row.student_number)} · ${text(row.first_name)} ${text(row.last_name)}`} /><SelectField label="Attendance status" name="status" rawOptions={[["present", "Present"], ["late", "Late"], ["absent", "Absent"], ["excused", "Excused"]]} /><TextArea label="Note" name="note" /><Submit busy={props.busy}>Save attendance</Submit></form></FormCard></div>}<Card title="Attendance records" eyebrow="REGISTER"><div className="status-summary">{["present", "late", "absent", "excused"].map((status) => <span key={status}><b>{records.filter((row) => row.status === status).length}</b>{human(status)}</span>)}</div><RecordList rows={records.slice(0, 40)} empty="No attendance has been captured." render={(row) => <><div className="record-between"><b>{lookupStudent(students, row.student_id)}</b><Status value={row.status} /></div><small>{lookup(sessions, row.attendance_session_id, "topic")} · {text(row.note)}</small></>} /></Card></div>;
++  const sessions = getRows(props.data, "attendance_sessions"); const students = getRows(props.data, "students"); const records = getRows(props.data, "attendance_records"); const classes = getRows(props.data, "classes"); const timetable = getRows(props.data, "timetable_entries"); const canWrite = attendanceManagers.has(props.role); const isStudent = props.role === "student";
++  const sessionOptions = sessions.map((row) => ({ id: text(row.id), label: `${formatDate(row.session_date)} · ${text(row.topic)}`, status: text(row.status) }));
++  return <div className="portal-content">
++    {isStudent && <StudentAttendanceScanner onRecorded={props.actions.refresh} />}
++    {canWrite && <div className="feature-grid three">
++      <FormCard title="Open an attendance session" intro="Create the register for a class date."><form onSubmit={(event) => void formInsert(event, props.actions, "attendance_sessions", { status: "open" }, "Attendance session opened.")}><SelectField label="Class" name="class_id" options={classes} optionLabel={(row) => text(row.name)} /><SelectField label="Timetable entry (optional)" name="timetable_entry_id" options={timetable} optionLabel={(row) => `${formatDate(row.session_date)} · ${text(row.title)}`} optional /><Field label="Session date" name="session_date" type="date" /><Field label="Topic" name="topic" /><Submit busy={props.busy}>Open register</Submit></form></FormCard>
++      <StaffAttendanceQr sessions={sessionOptions} demoMode={props.demoMode} onRefresh={props.actions.refresh} />
++      <FormCard title="Mark or correct attendance" intro="Submitting the same student and session updates the record. Manual corrections remain in the audit history."><form onSubmit={(event) => void formUpsert(event, props.actions, "attendance_records", "attendance_session_id,student_id", "Attendance saved.")}><SelectField label="Attendance session" name="attendance_session_id" options={sessions} optionLabel={(row) => `${formatDate(row.session_date)} · ${text(row.topic)}`} /><SelectField label="Student" name="student_id" options={students} optionLabel={(row) => `${text(row.student_number)} · ${text(row.first_name)} ${text(row.last_name)}`} /><SelectField label="Attendance status" name="status" rawOptions={[["present", "Present"], ["late", "Late"], ["absent", "Absent"], ["excused", "Excused"]]} /><TextArea label="Note" name="note" /><Submit busy={props.busy}>Save attendance</Submit></form></FormCard>
++    </div>}
++    <Card title={isStudent ? "My attendance history" : "Attendance records"} eyebrow={isStudent ? "MY REGISTER" : "REGISTER"}><div className="status-summary">{["present", "late", "absent", "excused"].map((status) => <span key={status}><b>{records.filter((row) => row.status === status).length}</b>{human(status)}</span>)}</div><RecordList rows={records.slice(0, 40)} empty="No attendance has been captured." render={(row) => <><div className="record-between"><b>{isStudent ? lookup(sessions, row.attendance_session_id, "topic") : lookupStudent(students, row.student_id)}</b><Status value={row.status} /></div><small>{isStudent ? `${formatDate(sessions.find((session) => session.id === row.attendance_session_id)?.session_date)} · ${text(row.note)}` : `${lookup(sessions, row.attendance_session_id, "topic")} · ${text(row.note)}`}</small></>} /></Card>
++  </div>;
+ }
+ 
+ function AssessmentsPanel(props: PanelProps) {
+diff --git a/app/portal/portal.css b/app/portal/portal.css
+index 286cf0b..6e59083 100644
+--- a/app/portal/portal.css
++++ b/app/portal/portal.css
+@@ -154,6 +154,29 @@
+ .student-action-form textarea { min-height: 88px; padding-top: 10px; resize: vertical; }
+ .student-new-chip { padding: 4px 8px; border-radius: 999px; background: #fff0d7; color: #91621c; font-size: 8px; font-weight: 800; }
+ .student-inline-button { min-height: 34px; margin-top: 11px; border: 1px solid #bdd2cc; border-radius: 8px; padding: 0 11px; background: white; color: #087f75; font-size: 9px; font-weight: 700; cursor: pointer; }
++.qr-attendance-card form { display: grid; gap: 14px; margin-top: 18px; }
++.qr-attendance-card form label, .qr-fallback label { display: grid; gap: 7px; color: #43595e; font-size: 10px; font-weight: 700; }
++.qr-attendance-card select, .qr-fallback input { width: 100%; min-height: 44px; border: 1px solid #cbd6d2; border-radius: 9px; padding: 0 11px; background: #fbfcfa; color: #173138; font: inherit; }
++.qr-display { margin-top: 18px; display: grid; justify-items: center; gap: 10px; padding: 18px; border: 1px solid #d9e3df; border-radius: 15px; background: #f7faf8; text-align: center; }
++.qr-display > b { color: #173138; font-size: 12px; }
++.qr-display img { width: min(100%, 320px); height: auto; padding: 8px; border-radius: 12px; background: white; }
++.qr-display > strong { color: #087f75; font-size: 26px; font-variant-numeric: tabular-nums; }
++.qr-display > span { color: #64797c; font-size: 9px; line-height: 1.5; }
++.qr-expired { width: min(100%, 320px); min-height: 180px; display: grid; place-items: center; border-radius: 12px; background: #e8edeb; color: #6a7c7f; font-weight: 800; }
++.qr-actions { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
++.qr-actions button { min-height: 42px; border: 1px solid #bdd2cc; border-radius: 8px; background: white; color: #087f75; font-size: 9px; font-weight: 800; cursor: pointer; }
++.qr-message { margin: 14px 0 0; padding: 11px 13px; border-radius: 9px; background: #fff4df; color: #825a18 !important; font-size: 10px; line-height: 1.55; }
++.qr-message.success { background: #e4f5ef; color: #08695f !important; }
++.qr-student-card > p { max-width: 760px; color: #64797c; font-size: 11px; line-height: 1.65; }
++.qr-student-card > .primary-action { width: fit-content; margin-top: 14px; }
++.qr-camera { width: min(100%, 540px); margin-top: 16px; display: grid; gap: 8px; }
++.qr-camera video { width: 100%; min-height: 240px; border-radius: 14px; background: #0d2026; object-fit: cover; }
++.qr-camera span { color: #65797d; font-size: 9px; }
++.qr-fallback { max-width: 540px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #e1e7e4; }
++.qr-fallback summary { color: #087f75; font-size: 10px; font-weight: 800; cursor: pointer; }
++.qr-fallback form { display: grid; gap: 11px; margin-top: 12px; }
++.attendance-check-in-page .brand { width: fit-content; margin-bottom: 28px; }
++.attendance-check-in-page .qr-message { max-width: 680px; font-size: 12px; }
+ 
+ @media (max-width: 1180px) {
+   .feature-grid.three, .report-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@@ -187,4 +210,6 @@
+   .configuration-page > div, .onboarding-page > section { padding: 28px 19px; }
+   .student-detail-grid { grid-template-columns: 1fr; }
+   .student-detail-grid > span:nth-child(even) { padding-left: 0; border-left: 0; }
++  .qr-actions { grid-template-columns: 1fr; }
++  .qr-camera video { min-height: 190px; }
+ }
+diff --git a/docs/FEATURE_MATRIX.md b/docs/FEATURE_MATRIX.md
+index 833969d..58ad975 100644
+--- a/docs/FEATURE_MATRIX.md
++++ b/docs/FEATURE_MATRIX.md
+@@ -1,4 +1,4 @@
+-# EduBonke v1.2 Feature Matrix
++# EduBonke v1.3 Feature Matrix
+ 
+ This matrix describes what the R0 prototype actually does. “Working” means the feature has a user interface, database model and relevant row-level access controls after the supplied Supabase migration is installed.
+ 
+@@ -12,7 +12,7 @@ This matrix describes what the R0 prototype actually does. “Working” means t
+ | Student records | Working | Registration, controlled CSV upsert, status changes, enrolments, class links and student account links | Synthetic data only on the R0 deployment |
+ | Workplace learning | Working | Student-to-employer and authorised supervisor placements with scoped supervisor access | No employer contracting or payroll functions |
+ | Timetable | Working | Shared dated sessions, times, venues and class/module links | No calendar-provider synchronisation |
+-| Attendance | Working | Sessions, per-student status and notes | No biometric or geolocation attendance |
++| Attendance | Working | Sessions, manual corrections and short-lived QR check-in restricted to a signed-in, linked and actively enrolled student | A QR check-in reduces register administration but does not by itself prove physical presence; no biometric or geolocation tracking |
+ | Assessment | Working | Assessment plans, scores, outcomes and assessor feedback | No automatic academic judgement |
+ | POE and moderation | Working | Private uploads, signed downloads, evidence review and separate moderation decisions | No malware scanning on the free prototype |
+ | Finance | Working | Rand invoices, payments, balances and funding administration | Not statutory accounting, a payment gateway or official NSFAS integration |
+diff --git a/docs/ZERO_COST_SETUP.md b/docs/ZERO_COST_SETUP.md
+index 8303e4f..94ce9b2 100644
+--- a/docs/ZERO_COST_SETUP.md
++++ b/docs/ZERO_COST_SETUP.md
+@@ -30,8 +30,10 @@ Free projects can pause after low activity. This is acceptable for a synthetic p
+ 3. Copy the complete contents of `supabase/migrations/202608150001_edubonke_full.sql` from this repository.
+ 4. Paste it into SQL Editor and select **Run**.
+ 5. Confirm that the query completes without an error.
++6. Create another new query and run `supabase/migrations/202608210002_qr_attendance.sql`.
++7. Confirm that the QR-attendance migration also completes without an error.
+ 
+-The migration creates the application tables, tenant-isolation functions, role policies, audit triggers, private document bucket and synthetic-data function.
++The migrations create the application tables, tenant-isolation functions, role policies, audit triggers, private document bucket, synthetic-data function and authenticated QR check-in. Students must be signed in, linked to a student record and actively enrolled in the register's class before a QR check-in can be written.
+ 
+ ## 3. Configure authentication URLs
+ 
+@@ -54,9 +56,9 @@ Email/password authentication is sufficient for the prototype. Do not disable em
+ 
+ ## 4. Add GitHub repository secrets
+ 
+-1. In Supabase, open **Project Settings → API**.
+-2. Copy the **Project URL**.
+-3. Copy the **anon** or **publishable** key. Never copy the `service_role` or secret key into GitHub Pages.
++1. In the Supabase project, select **Connect** in the top toolbar.
++2. Copy the **Project URL** shown in the Connect dialog. It has the form `https://<project-ref>.supabase.co`.
++3. Copy the **Publishable key** shown there. If needed, it is also under **Settings → API Keys** and normally starts with `sb_publishable_`. Never copy a secret or legacy `service_role` key into GitHub Pages.
+ 4. Open the GitHub repository: `https://github.com/edubonke/EduBonke`.
+ 5. Go to **Settings → Secrets and variables → Actions**.
+ 6. Create these repository secrets:
+@@ -66,7 +68,7 @@ NEXT_PUBLIC_SUPABASE_URL
+ NEXT_PUBLIC_SUPABASE_ANON_KEY
+ ```
+ 
+-The anonymous key is designed for browser applications. Security comes from the migration’s row-level policies, not from hiding this publishable key.
++The existing `NEXT_PUBLIC_SUPABASE_ANON_KEY` variable name accepts the current publishable key; it does not require a legacy `anon` key. Publishable keys are designed for browser applications. Security comes from the migration’s row-level policies, not from hiding this key.
+ 
+ ## 5. Enable GitHub Pages
+ 
+diff --git a/lib/demo-data.ts b/lib/demo-data.ts
+index 3bc0929..a276a69 100644
+--- a/lib/demo-data.ts
++++ b/lib/demo-data.ts
+@@ -84,6 +84,7 @@ export function createDemoWorkspace(): WorkspaceData {
+     attendance_sessions: [
+       { id: "attendance-session-1", institution_id, class_id: "class-ts-a", timetable_entry_id: "timetable-1", session_date: "2026-08-12", topic: "Fault-finding workflow", status: "closed" },
+       { id: "attendance-session-2", institution_id, class_id: "class-euc-a", session_date: "2026-08-13", topic: "Mail merge", status: "open" },
++      { id: "attendance-session-3", institution_id, class_id: "class-ts-a", timetable_entry_id: "timetable-2", session_date: "2026-08-21", topic: "Authenticated QR register demonstration", status: "open", check_in_enabled: false },
+     ],
+     attendance_records: [
+       { id: "attendance-1", institution_id, attendance_session_id: "attendance-session-1", student_id: "student-1", status: "present", note: "Completed the demonstration activity." },
+diff --git a/package.json b/package.json
+index 4aea47a..22e5d00 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "edubonke-prototype",
+-  "version": "1.2.0",
++  "version": "1.3.0",
+   "private": true,
+   "engines": {
+     "node": ">=20.9.0"
+@@ -14,8 +14,10 @@
+     "test": "npm run typecheck && npm run lint && npm run build && node --test tests/*.test.mjs"
+   },
+   "dependencies": {
++    "@zxing/browser": "0.2.1",
+     "@supabase/supabase-js": "2.57.4",
+     "next": "16.2.6",
++    "qrcode": "1.5.4",
+     "react": "19.2.6",
+     "react-dom": "19.2.6"
+   },
+@@ -24,6 +26,7 @@
+     "@types/node": "22.19.19",
+     "@types/react": "19.2.14",
+     "@types/react-dom": "19.2.3",
++    "@types/qrcode": "1.5.6",
+     "eslint": "9.39.4",
+     "eslint-config-next": "16.2.6",
+     "tailwindcss": "4.2.1",
+diff --git a/supabase/migrations/202608210002_qr_attendance.sql b/supabase/migrations/202608210002_qr_attendance.sql
+new file mode 100644
+index 0000000..0b50220
+--- /dev/null
++++ b/supabase/migrations/202608210002_qr_attendance.sql
+@@ -0,0 +1,291 @@
++-- EduBonke authenticated QR attendance check-in.
++--
++-- Students must already be signed in, linked to an active student record and
++-- actively enrolled in the class attached to the open attendance session.
++-- The raw QR token is returned once to authorised staff and is never stored.
++
++alter table public.attendance_sessions
++  add column if not exists check_in_token_hash text,
++  add column if not exists check_in_enabled boolean not null default false,
++  add column if not exists check_in_started_at timestamptz,
++  add column if not exists check_in_expires_at timestamptz,
++  add column if not exists check_in_started_by uuid references public.profiles(id);
++
++alter table public.attendance_records
++  add column if not exists check_in_method text not null default 'manual',
++  add column if not exists checked_in_at timestamptz;
++
++do $$
++begin
++  if not exists (
++    select 1 from pg_constraint
++    where conname = 'attendance_records_check_in_method_check'
++      and conrelid = 'public.attendance_records'::regclass
++  ) then
++    alter table public.attendance_records
++      add constraint attendance_records_check_in_method_check
++      check (check_in_method in ('manual', 'qr'));
++  end if;
++end $$;
++
++create unique index if not exists attendance_sessions_qr_token_hash_idx
++  on public.attendance_sessions(check_in_token_hash)
++  where check_in_token_hash is not null;
++
++drop policy if exists attendance_sessions_read on public.attendance_sessions;
++create policy attendance_sessions_read on public.attendance_sessions
++for select to authenticated using (
++  public.has_institution_role(
++    institution_id,
++    array['college_admin','academic_manager','lecturer','assessor','moderator']
++  )
++  or exists (
++    select 1
++    from public.students s
++    join public.enrolments e
++      on e.student_id = s.id
++     and e.institution_id = s.institution_id
++     and e.class_id = attendance_sessions.class_id
++     and e.status = 'active'
++    where s.institution_id = attendance_sessions.institution_id
++      and s.auth_user_id = auth.uid()
++      and s.status = 'active'
++  )
++);
++
++drop policy if exists attendance_sessions_write on public.attendance_sessions;
++create policy attendance_sessions_write on public.attendance_sessions
++for all to authenticated
++using (
++  public.has_institution_role(
++    institution_id,
++    array['college_admin','academic_manager','lecturer']
++  )
++)
++with check (
++  public.has_institution_role(
++    institution_id,
++    array['college_admin','academic_manager','lecturer']
++  )
++);
++
++create or replace function public.start_attendance_qr(
++  p_session_id uuid,
++  p_valid_minutes integer default 5
++)
++returns table (
++  check_in_token text,
++  check_in_expires_at timestamptz,
++  session_topic text
++)
++language plpgsql
++security definer
++set search_path = public, extensions
++as $$
++declare
++  selected_session public.attendance_sessions%rowtype;
++  raw_token text;
++  expiry timestamptz;
++begin
++  if auth.uid() is null then
++    raise exception 'Sign in before starting QR attendance';
++  end if;
++
++  if p_valid_minutes < 1 or p_valid_minutes > 10 then
++    raise exception 'QR validity must be between 1 and 10 minutes';
++  end if;
++
++  select * into selected_session
++  from public.attendance_sessions
++  where id = p_session_id
++  for update;
++
++  if selected_session.id is null then
++    raise exception 'Attendance session not found';
++  end if;
++
++  if selected_session.status <> 'open' then
++    raise exception 'Only an open attendance session can display a QR code';
++  end if;
++
++  if not public.has_institution_role(
++    selected_session.institution_id,
++    array['college_admin','academic_manager','lecturer']
++  ) then
++    raise exception 'Lecturer or attendance administrator access required';
++  end if;
++
++  raw_token := encode(gen_random_bytes(24), 'hex');
++  expiry := clock_timestamp() + make_interval(mins => p_valid_minutes);
++
++  update public.attendance_sessions
++  set check_in_token_hash = encode(digest(raw_token, 'sha256'), 'hex'),
++      check_in_enabled = true,
++      check_in_started_at = clock_timestamp(),
++      check_in_expires_at = expiry,
++      check_in_started_by = auth.uid(),
++      updated_at = clock_timestamp()
++  where id = selected_session.id;
++
++  return query
++  select raw_token, expiry, selected_session.topic;
++end;
++$$;
++
++create or replace function public.stop_attendance_qr(p_session_id uuid)
++returns void
++language plpgsql
++security definer
++set search_path = public
++as $$
++declare
++  selected_session public.attendance_sessions%rowtype;
++begin
++  if auth.uid() is null then
++    raise exception 'Authentication required';
++  end if;
++
++  select * into selected_session
++  from public.attendance_sessions
++  where id = p_session_id
++  for update;
++
++  if selected_session.id is null then
++    raise exception 'Attendance session not found';
++  end if;
++
++  if not public.has_institution_role(
++    selected_session.institution_id,
++    array['college_admin','academic_manager','lecturer']
++  ) then
++    raise exception 'Lecturer or attendance administrator access required';
++  end if;
++
++  update public.attendance_sessions
++  set check_in_token_hash = null,
++      check_in_enabled = false,
++      check_in_expires_at = clock_timestamp(),
++      updated_at = clock_timestamp()
++  where id = selected_session.id;
++end;
++$$;
++
++create or replace function public.check_in_attendance(p_token text)
++returns table (
++  attendance_record_id uuid,
++  attendance_session_id uuid,
++  attendance_status text,
++  session_topic text,
++  checked_in_at timestamptz
++)
++language plpgsql
++security definer
++set search_path = public, extensions
++as $$
++declare
++  selected_session public.attendance_sessions%rowtype;
++  selected_student_id uuid;
++  existing_record_id uuid;
++  existing_status text;
++  existing_checked_in_at timestamptz;
++  supplied_hash text;
++begin
++  if auth.uid() is null then
++    raise exception 'You must be signed in before scanning the attendance QR';
++  end if;
++
++  if p_token is null or p_token !~ '^[0-9a-fA-F]{48}$' then
++    raise exception 'The attendance QR is invalid';
++  end if;
++
++  supplied_hash := encode(digest(lower(p_token), 'sha256'), 'hex');
++
++  select * into selected_session
++  from public.attendance_sessions
++  where check_in_token_hash = supplied_hash
++    and check_in_enabled = true
++    and check_in_expires_at >= clock_timestamp()
++    and status = 'open'
++  order by check_in_started_at desc
++  limit 1
++  for update;
++
++  if selected_session.id is null then
++    raise exception 'This attendance QR has expired or the register is closed';
++  end if;
++
++  select s.id into selected_student_id
++  from public.students s
++  join public.institution_memberships membership
++    on membership.institution_id = s.institution_id
++   and membership.profile_id = auth.uid()
++   and membership.role = 'student'
++   and membership.status = 'active'
++  where s.institution_id = selected_session.institution_id
++    and s.auth_user_id = auth.uid()
++    and s.status = 'active'
++  limit 1;
++
++  if selected_student_id is null then
++    raise exception 'Your signed-in account is not linked to an active student record for this college';
++  end if;
++
++  if not exists (
++    select 1
++    from public.enrolments enrolment
++    where enrolment.institution_id = selected_session.institution_id
++      and enrolment.student_id = selected_student_id
++      and enrolment.class_id = selected_session.class_id
++      and enrolment.status = 'active'
++  ) then
++    raise exception 'You are not actively enrolled in the class for this register';
++  end if;
++
++  insert into public.attendance_records (
++    institution_id,
++    attendance_session_id,
++    student_id,
++    status,
++    note,
++    recorded_by,
++    check_in_method,
++    checked_in_at
++  ) values (
++    selected_session.institution_id,
++    selected_session.id,
++    selected_student_id,
++    'present',
++    'Authenticated student QR check-in',
++    auth.uid(),
++    'qr',
++    clock_timestamp()
++  )
++  on conflict (attendance_session_id, student_id) do nothing
++  returning id, status, public.attendance_records.checked_in_at
++  into existing_record_id, existing_status, existing_checked_in_at;
++
++  if existing_record_id is null then
++    select id, status, coalesce(public.attendance_records.checked_in_at, created_at)
++    into existing_record_id, existing_status, existing_checked_in_at
++    from public.attendance_records
++    where public.attendance_records.attendance_session_id = selected_session.id
++      and student_id = selected_student_id;
++  end if;
++
++  return query
++  select
++    existing_record_id,
++    selected_session.id,
++    existing_status,
++    selected_session.topic,
++    existing_checked_in_at;
++end;
++$$;
++
++revoke all on function public.start_attendance_qr(uuid, integer) from public, anon;
++revoke all on function public.stop_attendance_qr(uuid) from public, anon;
++revoke all on function public.check_in_attendance(text) from public, anon;
++
++grant execute on function public.start_attendance_qr(uuid, integer) to authenticated;
++grant execute on function public.stop_attendance_qr(uuid) to authenticated;
++grant execute on function public.check_in_attendance(text) to authenticated;
+diff --git a/tests/qr-attendance.test.mjs b/tests/qr-attendance.test.mjs
+new file mode 100644
+index 0000000..d816d8c
+--- /dev/null
++++ b/tests/qr-attendance.test.mjs
+@@ -0,0 +1,32 @@
++import assert from "node:assert/strict";
++import { readFile } from "node:fs/promises";
++import test from "node:test";
++
++test("QR attendance requires an authenticated linked and enrolled student", async () => {
++  const migration = await readFile(new URL("../supabase/migrations/202608210002_qr_attendance.sql", import.meta.url), "utf8");
++  assert.match(migration, /auth\.uid\(\) is null/);
++  assert.match(migration, /auth_user_id = auth\.uid\(\)/);
++  assert.match(migration, /membership\.role = 'student'/);
++  assert.match(migration, /enrolment\.class_id = selected_session\.class_id/);
++  assert.match(migration, /enrolment\.status = 'active'/);
++  assert.match(migration, /on conflict \(attendance_session_id, student_id\) do nothing/);
++});
++
++test("QR tokens are short-lived, hashed and unavailable to anonymous callers", async () => {
++  const migration = await readFile(new URL("../supabase/migrations/202608210002_qr_attendance.sql", import.meta.url), "utf8");
++  assert.match(migration, /digest\(raw_token, 'sha256'\)/);
++  assert.match(migration, /p_valid_minutes < 1 or p_valid_minutes > 10/);
++  assert.match(migration, /check_in_expires_at >= clock_timestamp\(\)/);
++  assert.match(migration, /revoke all on function public\.check_in_attendance\(text\) from public, anon/);
++  assert.doesNotMatch(migration, /service_role/i);
++});
++
++test("staff and student interfaces include the protected QR workflow", async () => {
++  const component = await readFile(new URL("../app/portal/attendance-qr.tsx", import.meta.url), "utf8");
++  const checkInPage = await readFile(new URL("../app/attendance/check-in/page.tsx", import.meta.url), "utf8");
++  assert.match(component, /Display attendance QR/);
++  assert.match(component, /You must already be signed in/);
++  assert.match(component, /supabase\.auth\.getUser\(\)/);
++  assert.match(component, /BrowserQRCodeReader/);
++  assert.match(checkInPage, /No attendance was recorded/);
++});
+diff --git a/tests/static-export.test.mjs b/tests/static-export.test.mjs
+index a69129b..cc39c2e 100644
+--- a/tests/static-export.test.mjs
++++ b/tests/static-export.test.mjs
+@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
+ import { readFile, stat } from "node:fs/promises";
+ import test from "node:test";
+ 
+-test("exports the public, student demo, staff demo, login, portal and privacy routes", async () => {
+-  for (const route of ["index.html", "demo/index.html", "demo/student/index.html", "demo/staff/index.html", "login/index.html", "portal/index.html", "privacy/index.html"]) {
++test("exports the public, demo, authentication, QR attendance, portal and privacy routes", async () => {
++  for (const route of ["index.html", "demo/index.html", "demo/student/index.html", "demo/staff/index.html", "login/index.html", "attendance/check-in/index.html", "portal/index.html", "privacy/index.html"]) {
+     const file = await stat(new URL(`../out/${route}`, import.meta.url));
+     assert.ok(file.size > 500, `${route} should contain rendered HTML`);
+   }
+

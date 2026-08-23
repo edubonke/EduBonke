@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
 import test from "node:test";
 
-test("exports the public, student demo, staff demo, login, portal and privacy routes", async () => {
-  for (const route of ["index.html", "demo/index.html", "demo/student/index.html", "demo/staff/index.html", "login/index.html", "portal/index.html", "privacy/index.html"]) {
+test("exports the public, demo, authentication, QR attendance, portal and privacy routes", async () => {
+  for (const route of ["index.html", "demo/index.html", "demo/student/index.html", "demo/staff/index.html", "login/index.html", "attendance/check-in/index.html", "portal/index.html", "privacy/index.html"]) {
     const file = await stat(new URL(`../out/${route}`, import.meta.url));
     assert.ok(file.size > 500, `${route} should contain rendered HTML`);
   }

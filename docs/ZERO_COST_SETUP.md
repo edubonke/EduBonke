@@ -30,8 +30,10 @@ Free projects can pause after low activity. This is acceptable for a synthetic p
 3. Copy the complete contents of `supabase/migrations/202608150001_edubonke_full.sql` from this repository.
 4. Paste it into SQL Editor and select **Run**.
 5. Confirm that the query completes without an error.
+6. Create another new query and run `supabase/migrations/202608210002_qr_attendance.sql`.
+7. Confirm that the QR-attendance migration also completes without an error.
 
-The migration creates the application tables, tenant-isolation functions, role policies, audit triggers, private document bucket and synthetic-data function.
+The migrations create the application tables, tenant-isolation functions, role policies, audit triggers, private document bucket, synthetic-data function and authenticated QR check-in. Students must be signed in, linked to a student record and actively enrolled in the register's class before a QR check-in can be written.
 
 ## 3. Configure authentication URLs
 
@@ -54,9 +56,9 @@ Email/password authentication is sufficient for the prototype. Do not disable em
 
 ## 4. Add GitHub repository secrets
 
-1. In Supabase, open **Project Settings → API**.
-2. Copy the **Project URL**.
-3. Copy the **anon** or **publishable** key. Never copy the `service_role` or secret key into GitHub Pages.
+1. In the Supabase project, select **Connect** in the top toolbar.
+2. Copy the **Project URL** shown in the Connect dialog. It has the form `https://<project-ref>.supabase.co`.
+3. Copy the **Publishable key** shown there. If needed, it is also under **Settings → API Keys** and normally starts with `sb_publishable_`. Never copy a secret or legacy `service_role` key into GitHub Pages.
 4. Open the GitHub repository: `https://github.com/edubonke/EduBonke`.
 5. Go to **Settings → Secrets and variables → Actions**.
 6. Create these repository secrets:
@@ -66,7 +68,7 @@ NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 ```
 
-The anonymous key is designed for browser applications. Security comes from the migration’s row-level policies, not from hiding this publishable key.
+The existing `NEXT_PUBLIC_SUPABASE_ANON_KEY` variable name accepts the current publishable key; it does not require a legacy `anon` key. Publishable keys are designed for browser applications. Security comes from the migration’s row-level policies, not from hiding this key.
 
 ## 5. Enable GitHub Pages
 

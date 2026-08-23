@@ -7,6 +7,7 @@ import { getSupabase, isSupabaseConfigured } from "../../lib/supabase";
 import { downloadCsv, formatDate, human, money, navigation, type InstitutionRole, type Membership, type WorkspaceData } from "../../lib/platform";
 import { createDemoWorkspace, demoMemberships, demoUser } from "../../lib/demo-data";
 import BrandLogo, { BrandMark } from "../brand";
+import { StaffAttendanceQr, StudentAttendanceScanner } from "./attendance-qr";
 
 type Row = Record<string, unknown>;
 type Notice = { type: "success" | "error"; text: string } | null;
@@ -22,6 +23,7 @@ const workspaceTables = [
 
 const academicWriters = new Set<InstitutionRole>(["college_admin", "academic_manager", "lecturer", "assessor", "moderator"]);
 const academicManagers = new Set<InstitutionRole>(["college_admin", "academic_manager"]);
+const attendanceManagers = new Set<InstitutionRole>(["college_admin", "academic_manager", "lecturer"]);
 const financeWriters = new Set<InstitutionRole>(["college_admin", "finance_officer"]);
 const privacyManagers = new Set<InstitutionRole>(["college_admin", "academic_manager"]);
 
@@ -300,8 +302,17 @@ function TimetablePanel(props: PanelProps) {
 }
 
 function AttendancePanel(props: PanelProps) {
-  const sessions = getRows(props.data, "attendance_sessions"); const students = getRows(props.data, "students"); const records = getRows(props.data, "attendance_records"); const classes = getRows(props.data, "classes"); const timetable = getRows(props.data, "timetable_entries"); const canWrite = academicWriters.has(props.role);
-  return <div className="portal-content">{canWrite && <div className="feature-grid two"><FormCard title="Open an attendance session" intro="Create the register for a class date."><form onSubmit={(event) => void formInsert(event, props.actions, "attendance_sessions", { status: "open" }, "Attendance session opened.")}><SelectField label="Class" name="class_id" options={classes} optionLabel={(row) => text(row.name)} /><SelectField label="Timetable entry (optional)" name="timetable_entry_id" options={timetable} optionLabel={(row) => `${formatDate(row.session_date)} · ${text(row.title)}`} optional /><Field label="Session date" name="session_date" type="date" /><Field label="Topic" name="topic" /><Submit busy={props.busy}>Open register</Submit></form></FormCard><FormCard title="Mark attendance" intro="Submitting the same student and session updates the record."><form onSubmit={(event) => void formUpsert(event, props.actions, "attendance_records", "attendance_session_id,student_id", "Attendance saved.")}><SelectField label="Attendance session" name="attendance_session_id" options={sessions} optionLabel={(row) => `${formatDate(row.session_date)} · ${text(row.topic)}`} /><SelectField label="Student" name="student_id" options={students} optionLabel={(row) => `${text(row.student_number)} · ${text(row.first_name)} ${text(row.last_name)}`} /><SelectField label="Attendance status" name="status" rawOptions={[["present", "Present"], ["late", "Late"], ["absent", "Absent"], ["excused", "Excused"]]} /><TextArea label="Note" name="note" /><Submit busy={props.busy}>Save attendance</Submit></form></FormCard></div>}<Card title="Attendance records" eyebrow="REGISTER"><div className="status-summary">{["present", "late", "absent", "excused"].map((status) => <span key={status}><b>{records.filter((row) => row.status === status).length}</b>{human(status)}</span>)}</div><RecordList rows={records.slice(0, 40)} empty="No attendance has been captured." render={(row) => <><div className="record-between"><b>{lookupStudent(students, row.student_id)}</b><Status value={row.status} /></div><small>{lookup(sessions, row.attendance_session_id, "topic")} · {text(row.note)}</small></>} /></Card></div>;
+  const sessions = getRows(props.data, "attendance_sessions"); const students = getRows(props.data, "students"); const records = getRows(props.data, "attendance_records"); const classes = getRows(props.data, "classes"); const timetable = getRows(props.data, "timetable_entries"); const canWrite = attendanceManagers.has(props.role); const isStudent = props.role === "student";
+  const sessionOptions = sessions.map((row) => ({ id: text(row.id), label: `${formatDate(row.session_date)} · ${text(row.topic)}`, status: text(row.status) }));
+  return <div className="portal-content">
+    {isStudent && <StudentAttendanceScanner onRecorded={props.actions.refresh} />}
+    {canWrite && <div className="feature-grid three">
+      <FormCard title="Open an attendance session" intro="Create the register for a class date."><form onSubmit={(event) => void formInsert(event, props.actions, "attendance_sessions", { status: "open" }, "Attendance session opened.")}><SelectField label="Class" name="class_id" options={classes} optionLabel={(row) => text(row.name)} /><SelectField label="Timetable entry (optional)" name="timetable_entry_id" options={timetable} optionLabel={(row) => `${formatDate(row.session_date)} · ${text(row.title)}`} optional /><Field label="Session date" name="session_date" type="date" /><Field label="Topic" name="topic" /><Submit busy={props.busy}>Open register</Submit></form></FormCard>
+      <StaffAttendanceQr sessions={sessionOptions} demoMode={props.demoMode} onRefresh={props.actions.refresh} />
+      <FormCard title="Mark or correct attendance" intro="Submitting the same student and session updates the record. Manual corrections remain in the audit history."><form onSubmit={(event) => void formUpsert(event, props.actions, "attendance_records", "attendance_session_id,student_id", "Attendance saved.")}><SelectField label="Attendance session" name="attendance_session_id" options={sessions} optionLabel={(row) => `${formatDate(row.session_date)} · ${text(row.topic)}`} /><SelectField label="Student" name="student_id" options={students} optionLabel={(row) => `${text(row.student_number)} · ${text(row.first_name)} ${text(row.last_name)}`} /><SelectField label="Attendance status" name="status" rawOptions={[["present", "Present"], ["late", "Late"], ["absent", "Absent"], ["excused", "Excused"]]} /><TextArea label="Note" name="note" /><Submit busy={props.busy}>Save attendance</Submit></form></FormCard>
+    </div>}
+    <Card title={isStudent ? "My attendance history" : "Attendance records"} eyebrow={isStudent ? "MY REGISTER" : "REGISTER"}><div className="status-summary">{["present", "late", "absent", "excused"].map((status) => <span key={status}><b>{records.filter((row) => row.status === status).length}</b>{human(status)}</span>)}</div><RecordList rows={records.slice(0, 40)} empty="No attendance has been captured." render={(row) => <><div className="record-between"><b>{isStudent ? lookup(sessions, row.attendance_session_id, "topic") : lookupStudent(students, row.student_id)}</b><Status value={row.status} /></div><small>{isStudent ? `${formatDate(sessions.find((session) => session.id === row.attendance_session_id)?.session_date)} · ${text(row.note)}` : `${lookup(sessions, row.attendance_session_id, "topic")} · ${text(row.note)}`}</small></>} /></Card>
+  </div>;
 }
 
 function AssessmentsPanel(props: PanelProps) {

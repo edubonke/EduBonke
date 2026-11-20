@@ -9,7 +9,7 @@ import ts from "typescript";
 // Run the same TypeScript selectors that feed React on every supported Node version.
 const build = mkdtempSync(join(tmpdir(), "edubonke-scope-"));
 after(() => rmSync(build, { recursive: true, force: true }));
-for (const name of ["platform", "demo-data", "staff-access"]) {
+for (const name of ["platform", "demo-data", "staff-access", "evidence-file"]) {
   const source = readFileSync(new URL(`../lib/${name}.ts`, import.meta.url), "utf8");
   const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } });
   writeFileSync(join(build, name + ".js"), outputText);
@@ -45,4 +45,21 @@ test("scoping also filters institutions, announcement audiences, tickets, commen
   assert.deepEqual(scoped.support_ticket_comments, []);
   assert.deepEqual(scoped.notifications, []);
   assert.equal(scopeStaffWorkspace(data, "college_admin", demoMemberships[0]).students.length, 5);
+});
+
+test("an empty CSV reports the filter before creating a download", () => {
+  const { downloadCsv } = require("./platform.js");
+  assert.throws(() => downloadCsv("sample.csv", []), { message: "No records match the current filter" });
+});
+
+test("evidence validation accepts exactly 10 MiB and rejects the very next byte", () => {
+  const { readEvidenceFile } = require("./evidence-file.js");
+  const form = new FormData();
+  assert.equal(readEvidenceFile(form).error, "Choose a non-empty file");
+  for (const bytes of [10 * 1024 * 1024, 10 * 1024 * 1024 + 1]) {
+    form.set("file", new Blob([new Uint8Array(bytes)]), "synthetic.pdf");
+    const result = readEvidenceFile(form);
+    if (bytes === 10 * 1024 * 1024) assert.equal(result.file.size, bytes);
+    else assert.equal(result.error, "File exceeds the 10MB limit");
+  }
 });

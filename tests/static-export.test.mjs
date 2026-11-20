@@ -58,3 +58,15 @@ test("paired finance dates shrink within narrow cards", async () => {
   assert.match(css, /\.form-pair > \* \{ min-width: 0; \}/);
   assert.match(css, /\.form-pair input, \.form-pair select \{ min-width: 0; \}/);
 });
+
+test("the sharing preview points to a real 1200 by 630 PNG on the Pages project path", async () => {
+  const html = await readFile(new URL("../out/index.html", import.meta.url), "utf8");
+  assert.match(html, /property="og:title" content="EduBonke \| College administration demo"/);
+  assert.match(html, /property="og:description" content="Try admissions, learner records and moderation with invented college data\."/);
+  const image = html.match(/property="og:image" content="([^"]+)"/)?.[1];
+  assert.equal(image, "https://edubonke.github.io/EduBonke/edubonke-social.png");
+  const png = await readFile(new URL("../out/edubonke-social.png", import.meta.url));
+  assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.equal(png.readUInt32BE(16), 1200);
+  assert.equal(png.readUInt32BE(20), 630);
+});

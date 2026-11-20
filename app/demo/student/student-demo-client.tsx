@@ -4,6 +4,7 @@ import Link from "next/link";
 import { NavigationToggle, useNavigationDisclosure } from "../../navigation-disclosure";
 import { useMemo, useState } from "react";
 import BrandLogo from "../../brand";
+import { readEvidenceFile } from "../../../lib/evidence-file";
 import { createDemoWorkspace } from "../../../lib/demo-data";
 import { formatDate, human, money, type WorkspaceData } from "../../../lib/platform";
 
@@ -31,6 +32,7 @@ export default function StudentDemoClient() {
   const [view, setView] = useState<StudentView>("dashboard");
   const [notice, setNotice] = useState("");
   const menu = useNavigationDisclosure("workspace-navigation");
+  const [fileError, setFileError] = useState("");
   const [readAnnouncements, setReadAnnouncements] = useState<string[]>([]);
 
   const student = rows(data, "students").find((row) => row.id === studentId) ?? {};
@@ -57,6 +59,7 @@ export default function StudentDemoClient() {
     setData(createDemoWorkspace());
     setView("dashboard");
     setReadAnnouncements([]);
+    setFileError("");
     setNotice("The student demonstration has been reset.");
   }
 
@@ -85,7 +88,10 @@ export default function StudentDemoClient() {
     event.preventDefault();
     const form = event.currentTarget;
     const formData = new FormData(form);
-    const file = formData.get("file") as File;
+    const selected = readEvidenceFile(formData);
+    if ("error" in selected) { setFileError(selected.error); return; }
+    setFileError("");
+    const { file } = selected;
     const next: Row = {
       id: crypto.randomUUID(),
       institution_id: "demo-mhlabeni-college",
@@ -173,7 +179,9 @@ export default function StudentDemoClient() {
           <form className="student-action-form" onSubmit={addEvidence}>
             <label>Assessment<select name="assessment_id" defaultValue="" required><option value="">Select an assessment</option>{assessments.map((row) => <option key={text(row.id)} value={text(row.id)}>{text(row.title)}</option>)}</select></label>
             <label>Evidence title<input name="title" required placeholder="Example: Hardware diagnostic checklist" /></label>
-            <label>Choose file<input name="file" type="file" required /></label>
+            <label>Choose file<input name="file" type="file" required aria-invalid={Boolean(fileError)}
+              aria-describedby={fileError ? "student-file-error" : undefined} onChange={() => setFileError("")} /></label>
+            {fileError && <p className="inline-error" id="student-file-error" role="alert">{fileError}</p>}
             <button className="primary-action">Add demonstration evidence</button>
           </form>
         </StudentCard>

@@ -239,3 +239,5 @@
   .academic-record tr { break-inside: avoid; }
   .academic-record thead { display: table-header-group; }
 }
+
+.portal-content .inline-error { min-height: 0; margin: 6px 0; color: #8c2530; font-size: 14px; }

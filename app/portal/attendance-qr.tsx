@@ -1,6 +1,5 @@
 "use client";
 
-import { BrowserQRCodeReader } from "@zxing/browser";
 import Image from "next/image";
 import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -151,17 +150,26 @@ export function StudentAttendanceScanner({ onRecorded }: { onRecorded(): Promise
 
   useEffect(() => {
     if (!scanning || !videoRef.current) return;
-    const reader = new BrowserQRCodeReader();
+    const video = videoRef.current;
     let stopped = false;
     let controls: { stop(): void } | null = null;
-    void reader.decodeFromVideoDevice(undefined, videoRef.current, (result, _error, callbackControls) => {
-      controls = callbackControls;
-      if (result && !stopped) {
-        stopped = true;
-        callbackControls.stop();
-        void record(result.getText());
-      }
-    }).then((activeControls) => { controls = activeControls; }).catch((error) => {
+    async function startCamera() {
+      const { BrowserQRCodeReader } = await import("@zxing/browser");
+      if (stopped) return;
+      const reader = new BrowserQRCodeReader();
+      const activeControls = await reader.decodeFromVideoDevice(undefined, video, (result, _error, callbackControls) => {
+        controls = callbackControls;
+        if (result && !stopped) {
+          stopped = true;
+          callbackControls.stop();
+          void record(result.getText());
+        }
+      });
+      if (stopped) activeControls.stop();
+      else controls = activeControls;
+    }
+    void startCamera().catch(error => {
+      if (stopped) return;
       setScanning(false);
       setMessage(`Camera scanning could not start: ${errorMessage(error)}`);
     });

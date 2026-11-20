@@ -57,7 +57,7 @@ export function human(value: unknown) {
 }
 
 export function downloadCsv(filename: string, rows: Array<Record<string, unknown>>) {
-  if (!rows.length) throw new Error("There are no records to export.");
+  if (!rows.length) throw new Error("No records match the current filter");
   const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
   const escape = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
   const csv = [columns.map(escape).join(","), ...rows.map((row) => columns.map((column) => escape(row[column])).join(","))].join("\n");

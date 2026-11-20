@@ -1,16 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { NavigationToggle, useNavigationDisclosure } from "../navigation-disclosure";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { getSupabase, isSupabaseConfigured } from "../../lib/supabase";
 import { downloadCsv, formatDate, human, money, navigation, type InstitutionRole, type Membership, type WorkspaceData } from "../../lib/platform";
 import { createDemoWorkspace, demoMemberships, demoUser } from "../../lib/demo-data";
+import { readEvidenceFile } from "../../lib/evidence-file";
 import { scopeStaffWorkspace, staffViews, type StaffRole } from "../../lib/staff-access";
 import AcademicRecord from "./academic-record";
 import BrandLogo, { BrandMark } from "../brand";
-import { StaffAttendanceQr, StudentAttendanceScanner } from "./attendance-qr";
+const qrLoading = () => <p role="status">Loading attendance tools…</p>;
+const StaffAttendanceQr = dynamic(() => import("./attendance-qr").then(module => module.StaffAttendanceQr), { ssr: false, loading: qrLoading });
+const StudentAttendanceScanner = dynamic(() => import("./attendance-qr").then(module => module.StudentAttendanceScanner), { ssr: false, loading: qrLoading });
 
 type Row = Record<string, unknown>;
 type Notice = { type: "success" | "error"; text: string } | null;
@@ -340,11 +344,16 @@ function AssessmentsPanel(props: PanelProps) {
 }
 
 function EvidencePanel(props: PanelProps) {
+  const [uploadError, setUploadError] = useState("");
   const students = getRows(props.data, "students"); const assessments = getRows(props.data, "assessments"); const results = getRows(props.data, "assessment_results"); const evidence = getRows(props.data, "evidence_documents"); const moderation = getRows(props.data, "moderation_records"); const canWrite = academicWriters.has(props.role); const canModerate = props.role === "college_admin" || props.role === "moderator";
   async function upload(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = event.currentTarget; const formData = new FormData(form); const file = formData.get("file");
-    if (!(file instanceof File) || !file.size) throw new Error("Choose a file to upload.");
-    if (file.size > 10 * 1024 * 1024) throw new Error("Prototype uploads are limited to 10 MB.");
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const selected = readEvidenceFile(formData);
+    if ("error" in selected) { setUploadError(selected.error); return; }
+    setUploadError("");
+    const { file } = selected;
     const studentId = String(formData.get("student_id")); const objectPath = `${props.institutionId}/${studentId}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
     if (props.demoMode) {
       await props.actions.insert("evidence_documents", { student_id: studentId, assessment_id: nullable(formData.get("assessment_id")), evidence_type: String(formData.get("evidence_type")), title: String(formData.get("title")), file_name: file.name, storage_path: `demo/${objectPath}`, content_type: file.type || "application/octet-stream", size_bytes: file.size, status: "received" }, "Demo evidence metadata added. The selected file was not uploaded anywhere.");
@@ -374,7 +383,11 @@ function EvidencePanel(props: PanelProps) {
       if (updateError) throw updateError; form.reset();
     }, "Moderation decision recorded.");
   }
-  return <div className="portal-content">{(canWrite || canModerate) && <div className="feature-grid two">{canWrite && <FormCard title="Upload POE or workplace evidence" intro={props.demoMode ? "This is a simulated prototype. No real files are uploaded or stored." : "Use invented evidence files only in this connected test workspace."}><form onSubmit={(event) => void upload(event)}><SelectField label="Student" name="student_id" options={students} optionLabel={(row) => `${text(row.student_number)} · ${text(row.first_name)} ${text(row.last_name)}`} /><SelectField label="Assessment (optional)" name="assessment_id" options={assessments} optionLabel={(row) => text(row.title)} optional /><SelectField label="Evidence category" name="evidence_type" rawOptions={[["poe", "Portfolio of Evidence"], ["workplace", "Workplace evidence"], ["logbook", "Logbook"], ["assessment_support", "Assessment support"]]} /><Field label="Evidence title" name="title" /><label>File<input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx,.txt" required /></label><Submit busy={props.busy}>Upload evidence</Submit></form></FormCard>}{canModerate && <FormCard title="Record moderation" intro="Create a separate accountable moderation record for an assessment result."><form onSubmit={(event) => void moderate(event)}><SelectField label="Assessment result" name="assessment_result_id" options={results} optionLabel={(row) => `${lookupStudent(students, row.student_id)} · ${lookup(assessments, row.assessment_id)}`} /><SelectField label="Decision" name="decision" rawOptions={[["upheld", "Outcome upheld"], ["changed", "Outcome changed"], ["returned", "Returned to assessor"]]} /><TextArea label="Comments" name="comments" /><Submit busy={props.busy}>Save moderation</Submit></form></FormCard>}</div>}<div className="dashboard-grid"><Card title="Evidence register" eyebrow="POE & WORKPLACE"><RecordList rows={evidence} empty="No evidence files have been uploaded." render={(row) => <><div className="record-between"><b>{text(row.title)}</b><Status value={row.status} /></div><small>{lookupStudent(students, row.student_id)} · {text(row.file_name)}</small><div className="inline-actions"><button onClick={() => void download(row)}>Download</button>{academicManagers.has(props.role) && <><button onClick={() => void props.actions.update("evidence_documents", row.id, { status: "verified", reviewed_by: props.user.id, reviewed_at: new Date().toISOString() }, "Evidence verified.")}>Verify</button><button onClick={() => void props.actions.update("evidence_documents", row.id, { status: "returned", reviewed_by: props.user.id, reviewed_at: new Date().toISOString() }, "Evidence returned.")}>Return</button></>}</div></>} /></Card>{"moderation_records" in props.data && <Card title="Moderation history" eyebrow="QUALITY ASSURANCE"><RecordList rows={moderation} empty="No moderation decisions have been recorded." render={row => {
+  return <div className="portal-content">{(canWrite || canModerate) && <div className="feature-grid two">{canWrite && <FormCard title="Upload POE or workplace evidence" intro={props.demoMode ? "This is a simulated prototype. No real files are uploaded or stored." : "Use invented evidence files only in this connected test workspace."}><form onSubmit={(event) => void upload(event)}><SelectField label="Student" name="student_id" options={students} optionLabel={(row) => `${text(row.student_number)} · ${text(row.first_name)} ${text(row.last_name)}`} /><SelectField label="Assessment (optional)" name="assessment_id" options={assessments} optionLabel={(row) => text(row.title)} optional /><SelectField label="Evidence category" name="evidence_type" rawOptions={[["poe", "Portfolio of Evidence"], ["workplace", "Workplace evidence"], ["logbook", "Logbook"], ["assessment_support", "Assessment support"]]} /><Field label="Evidence title" name="title" /><label>File<input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx,.txt" required
+      aria-invalid={Boolean(uploadError)} aria-describedby={uploadError ? "evidence-file-error" : undefined}
+      onChange={() => setUploadError("")} /></label>
+      {uploadError && <p id="evidence-file-error" className="inline-error" role="alert">{uploadError}</p>}
+      <Submit busy={props.busy}>Upload evidence</Submit></form></FormCard>}{canModerate && <FormCard title="Record moderation" intro="Create a separate accountable moderation record for an assessment result."><form onSubmit={(event) => void moderate(event)}><SelectField label="Assessment result" name="assessment_result_id" options={results} optionLabel={(row) => `${lookupStudent(students, row.student_id)} · ${lookup(assessments, row.assessment_id)}`} /><SelectField label="Decision" name="decision" rawOptions={[["upheld", "Outcome upheld"], ["changed", "Outcome changed"], ["returned", "Returned to assessor"]]} /><TextArea label="Comments" name="comments" /><Submit busy={props.busy}>Save moderation</Submit></form></FormCard>}</div>}<div className="dashboard-grid"><Card title="Evidence register" eyebrow="POE & WORKPLACE"><RecordList rows={evidence} empty="No evidence files have been uploaded." render={(row) => <><div className="record-between"><b>{text(row.title)}</b><Status value={row.status} /></div><small>{lookupStudent(students, row.student_id)} · {text(row.file_name)}</small><div className="inline-actions"><button onClick={() => void download(row)}>Download</button>{academicManagers.has(props.role) && <><button onClick={() => void props.actions.update("evidence_documents", row.id, { status: "verified", reviewed_by: props.user.id, reviewed_at: new Date().toISOString() }, "Evidence verified.")}>Verify</button><button onClick={() => void props.actions.update("evidence_documents", row.id, { status: "returned", reviewed_by: props.user.id, reviewed_at: new Date().toISOString() }, "Evidence returned.")}>Return</button></>}</div></>} /></Card>{"moderation_records" in props.data && <Card title="Moderation history" eyebrow="QUALITY ASSURANCE"><RecordList rows={moderation} empty="No moderation decisions have been recorded." render={row => {
       const result = results.find(item => item.id === row.assessment_result_id);
       return <>
         <div className="record-between">
@@ -395,9 +408,16 @@ function downloadInvoiceCsv(invoices: Row[], selectedId: unknown) {
 }
 
 function FinancePanel(props: PanelProps) {
+  const [exportError, setExportError] = useState<{ id: unknown; text: string } | null>(null);
+  function exportInvoice(id: unknown) {
+    setExportError(null);
+    try { downloadInvoiceCsv(invoices, id); }
+    catch (error) { setExportError({ id, text: message(error) }); }
+  }
   const students = getRows(props.data, "students"); const invoices = getRows(props.data, "invoices"); const payments = getRows(props.data, "payments"); const funding = getRows(props.data, "funding_records"); const canWrite = financeWriters.has(props.role);
   return <div className="portal-content">{canWrite && <div className="feature-grid three"><FormCard title="Create an invoice" intro="Record a student charge in South African rand."><form onSubmit={(event) => void formInsert(event, props.actions, "invoices", { status: "issued" }, "Invoice created.")}><SelectField label="Student" name="student_id" options={students} optionLabel={(row) => `${text(row.student_number)} · ${text(row.first_name)} ${text(row.last_name)}`} /><Field label="Invoice number" name="invoice_number" placeholder="INV-2026-001" /><Pair><Field label="Issue date" name="issue_date" type="date" /><Field label="Due date" name="due_date" type="date" /></Pair><Field label="Amount (R)" name="total_amount" type="number" step="0.01" /><TextArea label="Description" name="description" /><Submit busy={props.busy}>Create invoice</Submit></form></FormCard><FormCard title="Record a payment" intro="Capture a verified payment reference and method."><form onSubmit={(event) => void formInsert(event, props.actions, "payments", { status: "confirmed" }, "Payment recorded.")}><SelectField label="Invoice" name="invoice_id" options={invoices} optionLabel={(row) => `${text(row.invoice_number)} · ${money(row.balance ?? row.total_amount)}`} /><SelectField label="Student" name="student_id" options={students} optionLabel={(row) => `${text(row.student_number)} · ${text(row.first_name)} ${text(row.last_name)}`} /><Pair><Field label="Amount (R)" name="amount" type="number" step="0.01" /><Field label="Payment date" name="payment_date" type="date" /></Pair><SelectField label="Method" name="payment_method" rawOptions={[["eft", "EFT"], ["cash", "Cash"], ["card", "Card"], ["debit_order", "Debit order"], ["bursary", "Bursary"]]} /><Field label="Reference" name="reference_number" /><Submit busy={props.busy}>Record payment</Submit></form></FormCard><FormCard title="Funding record" intro="Track bursary or NSFAS-related administration without claiming an official integration."><form onSubmit={(event) => void formInsert(event, props.actions, "funding_records", { status: "pending" }, "Funding record saved.")}><SelectField label="Student" name="student_id" options={students} optionLabel={(row) => `${text(row.student_number)} · ${text(row.first_name)} ${text(row.last_name)}`} /><SelectField label="Funding type" name="funding_type" rawOptions={[["self_funded", "Self funded"], ["employer", "Employer"], ["bursary", "Bursary"], ["nsfas_tracking", "NSFAS tracking"], ["other", "Other"]]} /><Field label="Provider" name="provider_name" optional /><Field label="Reference" name="reference_number" optional /><Field label="Approved amount (R)" name="approved_amount" type="number" step="0.01" /><Submit busy={props.busy}>Save funding</Submit></form></FormCard></div>}<section className="metric-row finance-metrics"><Metric label="Invoices issued" value={invoices.length} note={money(invoices.reduce((sum, row) => sum + Number(row.total_amount ?? 0), 0))} /><Metric label="Payments recorded" value={payments.length} note={money(payments.reduce((sum, row) => sum + Number(row.amount ?? 0), 0))} /><Metric label="Funding records" value={funding.length} note="Administrative tracking only" /></section><Card title="Student accounts" eyebrow="FINANCE LEDGER"><RecordList rows={invoices} empty="No invoices have been created." render={(row) => <><div className="record-between"><b>{text(row.invoice_number)} · {lookupStudent(students, row.student_id)}</b><Status value={row.status} /></div><small>Issued {formatDate(row.issue_date)} · Due {formatDate(row.due_date)}</small><p>{money(row.total_amount)} · Balance {money(row.balance ?? row.total_amount)}</p><button className="secondary-action" type="button" aria-label={`Export invoice ${text(row.invoice_number)}`}
-        onClick={() => downloadInvoiceCsv(invoices, row.id)}>Export invoice CSV</button></>} /></Card><p className="scope-note">EduBonke’s prototype ledger is not statutory accounting software, a payment gateway or an official NSFAS integration.</p></div>;
+        onClick={() => exportInvoice(row.id)}>Export invoice CSV</button>
+        {exportError && exportError.id === row.id && <p className="inline-error" role="alert">{exportError.text}</p>}</>} /></Card><p className="scope-note">EduBonke’s prototype ledger is not statutory accounting software, a payment gateway or an official NSFAS integration.</p></div>;
 }
 
 function CommunicationsPanel(props: PanelProps) {
@@ -419,6 +439,18 @@ function ReportsPanel(props: PanelProps) {
   const [studentId, setStudentId] = useState("");
   const [preview, setPreview] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState("");
+  const [exportError, setExportError] = useState<{ key: string; text: string } | null>(null);
+
+  function exportReport(key: string) {
+    setExportError(null);
+    const rows = getRows(props.data, key);
+    try {
+      if (key === "invoices") downloadInvoiceCsv(rows, selectedInvoiceId);
+      else downloadCsv(`edubonke-${key}-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    } catch (error) {
+      setExportError({ key, text: message(error) });
+    }
+  }
   const generateButton = useRef<HTMLButtonElement>(null);
   const restoreFocus = useRef(false);
   const student = students.find(row => row.id === studentId);
@@ -450,18 +482,16 @@ function ReportsPanel(props: PanelProps) {
             <span>CSV</span><h2>{title}</h2><p>{note}</p><b>{getRows(props.data, key).length} records</b>
             {key === "invoices" ? <>
               <label className="invoice-select">Invoice
-                <select value={selectedInvoiceId} onChange={event => setSelectedInvoiceId(event.target.value)}>
+                <select value={selectedInvoiceId} onChange={event => { setSelectedInvoiceId(event.target.value); setExportError(null); }}>
                   <option value="">Select an invoice</option>
                   {getRows(props.data, key).map(row => (
                     <option key={text(row.id)} value={text(row.id)}>{text(row.invoice_number)} · {lookupStudent(students, row.student_id)}</option>
                   ))}
                 </select>
               </label>
-              <button type="button" disabled={!selectedInvoiceId} onClick={() => downloadInvoiceCsv(getRows(props.data, key), selectedInvoiceId)}>Download selected invoice</button>
-            </> : <button type="button" onClick={() => {
-              try { downloadCsv(`edubonke-${key}-${new Date().toISOString().slice(0, 10)}.csv`, getRows(props.data, key)); }
-              catch { return; }
-            }}>Download</button>}
+            </> : null}
+            <button type="button" onClick={() => exportReport(key)}>{key === "invoices" ? "Download selected invoice" : "Download"}</button>
+            {exportError?.key === key && <p className="inline-error" role="alert">{exportError.text}</p>}
           </article>
         ))}
       </section>

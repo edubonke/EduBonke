@@ -1,6 +1,8 @@
 type BrandMarkProps = {
   className?: string;
   title?: string;
+  width?: number;
+  height?: number;
 };
 
 type BrandLogoProps = {
@@ -9,10 +11,11 @@ type BrandLogoProps = {
   subtitle?: string;
 };
 
-export function BrandMark({ className = "", title }: BrandMarkProps) {
+export function BrandMark({ className = "", title, width, height }: BrandMarkProps) {
   return (
     <svg
       className={`brand-symbol ${className}`.trim()}
+      width={width} height={height}
       viewBox="0 0 96 72"
       xmlns="http://www.w3.org/2000/svg"
       role={title ? "img" : undefined}

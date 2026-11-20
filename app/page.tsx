@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PublicNavigation } from "./navigation-disclosure";
 import BrandLogo, { BrandMark } from "./brand";
 
 const modules = [
@@ -18,21 +19,19 @@ const modules = [
 
 export default function Home() {
   return (
-    <main className="landing-shell">
+    <div className="landing-shell">
+      <a className="skip-link" href="#main-content">Skip to content</a>
       <header className="landing-nav">
         <Link className="brand" href="/" aria-label="EduBonke home">
           <BrandLogo />
         </Link>
-        <nav aria-label="Primary navigation">
-          <a href="#platform">Platform</a>
-          <a href="#safeguards">Safeguards</a>
-          <a href="#pilot">Pilot</a>
-        </nav>
+        <PublicNavigation />
         <Link className="button button-small" href="/demo">
           Open interactive demo
         </Link>
       </header>
 
+      <main id="main-content" tabIndex={-1}>
       <section className="hero" aria-labelledby="hero-title">
         <div className="hero-copy">
           <div className="eyebrow"><span /> South African college administration</div>
@@ -82,7 +81,7 @@ export default function Home() {
         <span>Temporary browser workspace</span><span>Staff role previews</span><span>Sample audit history</span><span>POPIA-aware workflows</span>
       </section>
 
-      <section className="section" id="platform" aria-labelledby="platform-title">
+      <section className="section" id="platform" tabIndex={-1} aria-labelledby="platform-title">
         <div className="section-heading">
           <span className="section-index">01</span>
           <div><p className="eyebrow-text">Focused first release</p><h2 id="platform-title">The daily tools a college actually needs</h2></div>
@@ -97,7 +96,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="security-section" id="safeguards" aria-labelledby="security-title">
+      <section className="security-section" id="safeguards" tabIndex={-1} aria-labelledby="security-title">
         <div>
           <p className="eyebrow-text light">Built around responsible access</p>
           <h2 id="security-title">Privacy is part of the workflow, not a footer.</h2>
@@ -112,7 +111,7 @@ export default function Home() {
         </ul>
       </section>
 
-      <section className="pilot-section" id="pilot" aria-labelledby="pilot-title">
+      <section className="pilot-section" id="pilot" tabIndex={-1} aria-labelledby="pilot-title">
         <div className="section-index">02</div>
         <div>
           <p className="eyebrow-text">Controlled prototype</p>
@@ -125,11 +124,12 @@ export default function Home() {
         </div>
       </section>
 
+      </main>
       <footer>
         <BrandLogo className="brand" />
         <p>Every college. Every learner. One platform.</p>
         <p><Link href="/privacy">Prototype privacy notice</Link> · Working name · v1.1</p>
       </footer>
-    </main>
+    </div>
   );
 }

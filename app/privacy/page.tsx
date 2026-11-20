@@ -2,9 +2,9 @@ import Link from "next/link";
 import BrandLogo from "../brand";
 
 export default function PrivacyPage() {
-  return <main className="privacy-notice-page">
+  return <div className="privacy-notice-page">
     <header><Link className="brand" href="/" aria-label="EduBonke home"><BrandLogo /></Link><span>Prototype privacy notice</span></header>
-    <article>
+    <main>
       <p className="eyebrow-text">Public demonstration</p>
       <h1>How the EduBonke prototype handles information</h1>
       <div className="notice-banner"><b>Prototype restriction</b><p>Only invented or synthetic learner information may be entered. The prototype has not been approved for live college records.</p></div>
@@ -16,6 +16,6 @@ export default function PrivacyPage() {
       <section><h2>Separately configured connected testing</h2><p>A college that enables the optional connected portal processes tester accounts, invented records and selected files through its configured Supabase project. Its operator must provide its own contact, retention and access information before inviting testers.</p></section>
       <section><h2>Before an external pilot</h2><p>The responsible party, Information Officer contact details, operator agreement, approved retention periods, cross-border-data assessment, incident procedure and hosting region must be confirmed. This page is a product control, not legal advice or a completed compliance determination.</p></section>
       <Link className="button" href="/">Return to EduBonke</Link>
-    </article>
-  </main>;
+    </main>
+  </div>;
 }

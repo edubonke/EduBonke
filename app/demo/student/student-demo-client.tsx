@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { NavigationToggle, useNavigationDisclosure } from "../../navigation-disclosure";
 import { useMemo, useState } from "react";
 import BrandLogo from "../../brand";
 import { createDemoWorkspace } from "../../../lib/demo-data";
@@ -29,7 +30,7 @@ export default function StudentDemoClient() {
   const [data, setData] = useState<WorkspaceData>(() => createDemoWorkspace());
   const [view, setView] = useState<StudentView>("dashboard");
   const [notice, setNotice] = useState("");
-  const [mobileNav, setMobileNav] = useState(false);
+  const menu = useNavigationDisclosure("workspace-navigation");
   const [readAnnouncements, setReadAnnouncements] = useState<string[]>([]);
 
   const student = rows(data, "students").find((row) => row.id === studentId) ?? {};
@@ -203,20 +204,24 @@ export default function StudentDemoClient() {
   const currentLabel = studentNavigation.find(([key]) => key === view)?.[1] ?? "My dashboard";
 
   return (
-    <main className="portal-shell student-demo-shell">
-      <aside className={mobileNav ? "portal-sidebar open" : "portal-sidebar"}>
+    <div className="portal-shell student-demo-shell">
+      <a className="skip-link" href="#workspace-content">Skip to workspace</a>
+      <aside id={menu.id} className={menu.open ? "portal-sidebar open" : "portal-sidebar"}>
+        <button type="button" className="drawer-close" onClick={() => menu.close()}>Close navigation</button>
         <BrandLogo className="portal-brand" inverse subtitle="Student Demo" />
         <div className="workspace-card"><small>MY COLLEGE</small><b>Mhlabeni Skills College — Demo</b><span>{text(student.student_number)} · Active student</span></div>
-        <nav>{studentNavigation.map(([key, label, icon]) => <button key={key} className={view === key ? "active" : ""} onClick={() => { setView(key); setMobileNav(false); }}><span>{icon}</span>{label}</button>)}</nav>
+        <nav aria-label="Student workspace">{studentNavigation.map(([key, label, icon]) => <button key={key} aria-current={view === key ? "page" : undefined} className={view === key ? "active" : ""} onClick={() => { setView(key); if (menu.open) menu.close(); }}><span>{icon}</span>{label}</button>)}</nav>
         <div className="sidebar-footer"><Link href="/demo">Switch demo</Link><button onClick={resetDemo}>Reset demo</button></div>
       </aside>
-      <section className="portal-main">
-        <header className="portal-topbar"><button className="mobile-menu" onClick={() => setMobileNav((value) => !value)} aria-label="Toggle navigation">☰</button><div><small>Student demo · {currentLabel}</small><h1>{view === "dashboard" ? `Welcome, ${text(student.first_name)}` : currentLabel}</h1></div><div className="account-chip"><span>TM</span><div><b>Thabo Mokoena</b><small>Student · {text(student.student_number)}</small></div></div></header>
+      <div className="portal-main">
+        <header className="portal-topbar"><NavigationToggle menu={menu} label="Workspace navigation" /><div><small>Student demo · {currentLabel}</small><h1>{view === "dashboard" ? `Welcome, ${text(student.first_name)}` : currentLabel}</h1></div><div className="account-chip"><span>TM</span><div><b>Thabo Mokoena</b><small>Student · {text(student.student_number)}</small></div></div></header>
+        <main id="workspace-content" tabIndex={-1}>
         <div className="demo-mode-banner"><b>Student demonstration</b><span>Only Thabo’s invented learner record is shown. Changes remain in this browser session.</span><Link href="/demo">Choose another demo</Link></div>
         {notice && <div className="portal-notice success" role="status"><span>✓</span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss message">×</button></div>}
         {renderContent()}
-      </section>
-    </main>
+        </main>
+      </div>
+    </div>
   );
 }
 

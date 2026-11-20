@@ -1,6 +1,6 @@
 # EduBonke R0 Setup Guide
 
-This guide creates the functional prototype without ChatGPT hosting or a paid hosting plan. GitHub Pages hosts the application and Supabase Free provides accounts, PostgreSQL and private file storage.
+This guide creates the functional prototype without ChatGPT hosting or a paid hosting plan. GitHub Pages hosts the public synthetic demo. The optional connected setup below is for a separate deployment or local development.
 
 ## Fastest demonstration: GitHub Pages only
 
@@ -39,36 +39,11 @@ The migrations create the application tables, tenant-isolation functions, role p
 
 In Supabase, open **Authentication → URL Configuration**.
 
-Set the Site URL to:
+Set the Site URL and allowed redirect URLs to the actual origin and path of your separate connected portal. For local development use `http://localhost:3000` and `http://localhost:3000/**`.
 
-```text
-https://edubonke.github.io/EduBonke/
-```
+## 4. Configure the separate connected environment
 
-Add these Redirect URLs:
-
-```text
-http://localhost:3000/**
-https://edubonke.github.io/EduBonke/**
-```
-
-Email/password authentication is sufficient for the prototype. Do not disable email confirmation for a live pilot.
-
-## 4. Add GitHub repository secrets
-
-1. In the Supabase project, select **Connect** in the top toolbar.
-2. Copy the **Project URL** shown in the Connect dialog. It has the form `https://<project-ref>.supabase.co`.
-3. Copy the **Publishable key** shown there. If needed, it is also under **Settings → API Keys** and normally starts with `sb_publishable_`. Never copy a secret or legacy `service_role` key into GitHub Pages.
-4. Open the GitHub repository: `https://github.com/edubonke/EduBonke`.
-5. Go to **Settings → Secrets and variables → Actions**.
-6. Create these repository secrets:
-
-```text
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
-```
-
-The existing `NEXT_PUBLIC_SUPABASE_ANON_KEY` variable name accepts the current publishable key; it does not require a legacy `anon` key. Publishable keys are designed for browser applications. Security comes from the migration’s row-level policies, not from hiding this key.
+Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in the separate deployment's build environment or a local `.env.local`. Use only the project URL and browser publishable key. Keep service-role credentials out of frontend builds. The public Pages workflow does not use backend credentials.
 
 ## 5. Enable GitHub Pages
 
@@ -86,7 +61,7 @@ https://edubonke.github.io/EduBonke/
 
 ## 6. Create the first workspace
 
-1. Open the deployed site and select **Sign in to EduBonke**.
+1. Open `/login/` on the separately configured connected deployment.
 2. Create an account using an email address you control.
 3. Confirm the address using the Supabase email.
 4. Sign in and select **Create a test college**.

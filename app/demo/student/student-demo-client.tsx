@@ -168,7 +168,7 @@ export default function StudentDemoClient() {
     if (view === "poe") return (
       <div className="portal-content two-column">
         <StudentCard title="Submit POE evidence" eyebrow="STUDENT ACTION" form>
-          <p className="student-form-intro">Choose a demonstration file to see the submission workflow. No file leaves your device.</p>
+          <p className="student-form-intro">This is a simulated prototype. No real files are uploaded or stored.</p>
           <form className="student-action-form" onSubmit={addEvidence}>
             <label>Assessment<select name="assessment_id" defaultValue="" required><option value="">Select an assessment</option>{assessments.map((row) => <option key={text(row.id)} value={text(row.id)}>{text(row.title)}</option>)}</select></label>
             <label>Evidence title<input name="title" required placeholder="Example: Hardware diagnostic checklist" /></label>

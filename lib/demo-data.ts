@@ -34,15 +34,15 @@ export function createDemoWorkspace(): WorkspaceData {
       { id: "period-sep", institution_id, name: "September 2026 Intake", start_date: "2026-09-01", end_date: "2027-08-31", status: "planned" },
     ],
     programmes: [
-      { id: "programme-ts4", institution_id, code: "TS-NQF4-DEMO", title: "Technical Support NQF Level 4 — Demo", nqf_level: "4", saqa_id: "DEMO-78964", credits: 163, delivery_mode: "blended", status: "active" },
-      { id: "programme-euc3", institution_id, code: "EUC-NQF3-DEMO", title: "End User Computing NQF Level 3 — Demo", nqf_level: "3", saqa_id: "DEMO-61591", credits: 130, delivery_mode: "classroom", status: "active" },
-      { id: "programme-ba5", institution_id, code: "BA-NQF5-DEMO", title: "Business Analysis Support Practice NQF Level 5 — Demo", nqf_level: "5", saqa_id: "DEMO-63769", credits: 138, delivery_mode: "blended", status: "active" },
+      { id: "programme-ts4", institution_id, code: "TS-NQF4-DEMO", title: "Technical Support NQF Level 4 — Demo", nqf_level: "4", saqa_id: "FAKE-QUAL-001", credits: 163, delivery_mode: "blended", status: "active" },
+      { id: "programme-euc3", institution_id, code: "EUC-NQF3-DEMO", title: "End User Computing NQF Level 3 — Demo", nqf_level: "3", saqa_id: "FAKE-QUAL-002", credits: 130, delivery_mode: "classroom", status: "active" },
+      { id: "programme-ba5", institution_id, code: "BA-NQF5-DEMO", title: "Business Analysis Support Practice NQF Level 5 — Demo", nqf_level: "5", saqa_id: "FAKE-QUAL-003", credits: 138, delivery_mode: "blended", status: "active" },
     ],
     modules: [
-      { id: "module-hardware", institution_id, programme_id: "programme-ts4", code: "HW-14913", title: "Computer Hardware Support", unit_standard_reference: "DEMO-US-14913", credits: 12 },
-      { id: "module-network", institution_id, programme_id: "programme-ts4", code: "NET-14937", title: "Network Support", unit_standard_reference: "DEMO-US-14937", credits: 10 },
-      { id: "module-word", institution_id, programme_id: "programme-euc3", code: "WP-117924", title: "Word Processing", unit_standard_reference: "DEMO-US-117924", credits: 5 },
-      { id: "module-analysis", institution_id, programme_id: "programme-ba5", code: "BA-CORE", title: "Business Analysis Practice", unit_standard_reference: "DEMO-BA-CORE", credits: 15 },
+      { id: "module-hardware", institution_id, programme_id: "programme-ts4", code: "HW-DEMO", title: "Computer Hardware Support", unit_standard_reference: "FAKE-US-001", credits: 12 },
+      { id: "module-network", institution_id, programme_id: "programme-ts4", code: "NET-DEMO", title: "Network Support", unit_standard_reference: "FAKE-US-002", credits: 10 },
+      { id: "module-word", institution_id, programme_id: "programme-euc3", code: "WP-DEMO", title: "Word Processing", unit_standard_reference: "FAKE-US-003", credits: 5 },
+      { id: "module-analysis", institution_id, programme_id: "programme-ba5", code: "BA-CORE", title: "Business Analysis Practice", unit_standard_reference: "FAKE-US-004", credits: 15 },
     ],
     programme_modules: [],
     classes: [
@@ -52,7 +52,7 @@ export function createDemoWorkspace(): WorkspaceData {
     ],
     applications: [
       { id: "app-1", institution_id, reference_number: "DEMO-APP-001", first_name: "Ayanda", last_name: "Nkosi", email: "ayanda.nkosi@example.invalid", phone: "000 000 0001", programme_id: "programme-ts4", intake_date: "2026-09-01", status: "reviewing", notes: "Synthetic application awaiting document review.", created_at: "2026-08-11T09:00:00Z" },
-      { id: "app-2", institution_id, reference_number: "DEMO-APP-002", first_name: "Kagiso", last_name: "Molefe", email: "kagiso.molefe@example.invalid", phone: "000 000 0002", programme_id: "programme-euc3", intake_date: "2026-09-01", status: "received", notes: "Synthetic online enquiry.", created_at: "2026-08-12T10:00:00Z" },
+      { id: "app-2", institution_id, reference_number: "DEMO-APP-002", first_name: "Kagiso", last_name: "Molefe", email: "kagiso.molefe@example.invalid", phone: "000 000 0002", programme_id: "programme-euc3", intake_date: "2026-06-01", status: "received", notes: "Synthetic online enquiry.", created_at: "2026-05-12T10:00:00Z" },
       { id: "app-3", institution_id, reference_number: "DEMO-APP-003", first_name: "Lerato", last_name: "Mthembu", email: "lerato.mthembu@example.invalid", phone: "000 000 0003", programme_id: "programme-ba5", intake_date: "2026-09-01", status: "accepted", created_at: "2026-08-10T08:30:00Z" },
       { id: "app-4", institution_id, reference_number: "DEMO-APP-004", first_name: "Sibusiso", last_name: "Mahlangu", email: "sibusiso.mahlangu@example.invalid", phone: "000 000 0004", programme_id: "programme-ts4", intake_date: "2026-09-01", status: "waitlisted", created_at: "2026-08-09T11:30:00Z" },
     ],

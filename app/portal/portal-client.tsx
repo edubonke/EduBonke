@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { getSupabase, isSupabaseConfigured } from "../../lib/supabase";
 import { downloadCsv, formatDate, human, money, navigation, type InstitutionRole, type Membership, type WorkspaceData } from "../../lib/platform";
 import { createDemoWorkspace, demoMemberships, demoUser } from "../../lib/demo-data";
+import { scopeStaffWorkspace, staffViews, type StaffRole } from "../../lib/staff-access";
+import AcademicRecord from "./academic-record";
 import BrandLogo, { BrandMark } from "../brand";
 import { StaffAttendanceQr, StudentAttendanceScanner } from "./attendance-qr";
 
@@ -27,7 +29,7 @@ const attendanceManagers = new Set<InstitutionRole>(["college_admin", "academic_
 const financeWriters = new Set<InstitutionRole>(["college_admin", "finance_officer"]);
 const privacyManagers = new Set<InstitutionRole>(["college_admin", "academic_manager"]);
 
-const demoStaffActors: Array<{ role: Exclude<InstitutionRole, "student" | "workplace_supervisor">; id: string; name: string; email: string }> = [
+const demoStaffActors: Array<{ role: StaffRole; id: string; name: string; email: string }> = [
   { role: "college_admin", id: "profile-admin", name: "Nomsa Dlamini", email: "nomsa.admin@example.invalid" },
   { role: "academic_manager", id: "profile-manager", name: "Sipho Mthembu", email: "sipho.manager@example.invalid" },
   { role: "lecturer", id: "profile-lecturer", name: "Naledi Masilo", email: "naledi.lecturer@example.invalid" },
@@ -35,15 +37,6 @@ const demoStaffActors: Array<{ role: Exclude<InstitutionRole, "student" | "workp
   { role: "moderator", id: "profile-moderator", name: "Palesa Motau", email: "palesa.moderator@example.invalid" },
   { role: "finance_officer", id: "profile-finance", name: "Bongani Zulu", email: "bongani.finance@example.invalid" },
 ];
-
-const staffViews: Record<(typeof demoStaffActors)[number]["role"], ReadonlySet<(typeof navigation)[number][0]>> = {
-  college_admin: new Set(navigation.map(([key]) => key)),
-  academic_manager: new Set(["overview", "admissions", "students", "academics", "timetable", "attendance", "assessments", "evidence", "communications", "reports", "support", "privacy", "administration"]),
-  lecturer: new Set(["overview", "students", "timetable", "attendance", "assessments", "evidence", "communications", "reports", "support"]),
-  assessor: new Set(["overview", "students", "assessments", "evidence", "reports", "support"]),
-  moderator: new Set(["overview", "students", "assessments", "evidence", "reports", "support"]),
-  finance_officer: new Set(["overview", "students", "finance", "communications", "reports", "support"]),
-};
 
 export default function PortalClient({ demoMode = false, staffDemo = false }: { demoMode?: boolean; staffDemo?: boolean }) {
   const [user, setUser] = useState<User | null>(demoMode ? demoUser as unknown as User : null);
@@ -186,10 +179,13 @@ export default function PortalClient({ demoMode = false, staffDemo = false }: { 
   if (!membership) return <Onboarding user={user} busy={busy} notice={notice} setBusy={setBusy} setNotice={setNotice} onComplete={() => loadMemberships(user)} onSignOut={signOut} />;
 
   const role = membership.role;
-  const panelProps = { data, role, busy, actions, institutionId: membership.institution_id, user, demoMode };
-  const visibleNavigation = staffDemo && role !== "student" && role !== "workplace_supervisor"
-    ? navigation.filter(([key]) => staffViews[role].has(key))
+  const staffRole = role === "student" || role === "workplace_supervisor" ? null : role;
+  const scoped = staffRole && !isSuperAdmin ? scopeStaffWorkspace(data, staffRole, membership) : data;
+  const panelProps = { data: scoped, role, busy, actions, institutionId: membership.institution_id, user, demoMode };
+  const visibleNavigation = staffRole && !isSuperAdmin
+    ? navigation.filter(([key]) => staffViews[staffRole].has(key))
     : navigation;
+  const activeView = visibleNavigation.some(([key]) => key === view) ? view : "overview";
 
   return (
     <main className="portal-shell">
@@ -216,7 +212,7 @@ export default function PortalClient({ demoMode = false, staffDemo = false }: { 
         </header>
         {demoMode && <div className="demo-mode-banner"><b>{staffDemo ? "Staff and administrator demonstration" : "Interactive demonstration"}</b><span>{staffDemo ? `You are viewing the permissions and tools available to a ${human(role)}. ` : ""}Every person, college, amount and record is invented. Changes last only until this page is refreshed or reset.</span><Link href="/demo">Choose another demo</Link></div>}
         {notice && <div className={`portal-notice ${notice.type}`} role="status"><span>{notice.type === "success" ? "✓" : "!"}</span>{notice.text}<button onClick={() => setNotice(null)}>×</button></div>}
-        {loading ? <LoadingScreen text="Loading college records…" compact /> : <Panel view={view} props={panelProps} isSuperAdmin={isSuperAdmin} />}
+        {loading ? <LoadingScreen text="Loading college records…" compact /> : <Panel key={`${membership.institution_id}:${user.id}:${role}`} view={activeView} props={panelProps} isSuperAdmin={isSuperAdmin} />}
       </section>
     </main>
   );
@@ -260,7 +256,7 @@ function Panel({ view, props, isSuperAdmin }: { view: string; props: PanelProps;
 function OverviewPanel({ data, role, demoMode }: PanelProps) {
   const students = getRows(data, "students"); const applications = getRows(data, "applications"); const results = getRows(data, "assessment_results"); const invoices = getRows(data, "invoices");
   const outstanding = invoices.reduce((sum, row) => sum + Number(row.balance ?? row.total_amount ?? 0), 0);
-  return <div className="portal-content"><section className="metric-row"><Metric label="Active students" value={students.filter((row) => row.status === "active").length} note={`${students.length} total records`} /><Metric label="Admissions queue" value={applications.filter((row) => !["accepted", "declined"].includes(String(row.status))).length} note={`${applications.length} applications`} /><Metric label="Competent outcomes" value={results.filter((row) => row.outcome === "competent").length} note={`${results.length} captured outcomes`} /><Metric label="Outstanding fees" value={money(outstanding)} note="Prototype finance ledger" /></section><div className="dashboard-grid"><Card title="Upcoming classes" eyebrow="TIMETABLE"><RecordList rows={getRows(data, "timetable_entries").slice(0, 6)} empty="No classes have been scheduled." render={(row) => <><b>{text(row.title)}</b><small>{formatDate(row.session_date)} · {text(row.start_time)}–{text(row.end_time)} · {text(row.venue)}</small></>} /></Card><Card title="Latest announcements" eyebrow="COMMUNICATIONS"><RecordList rows={getRows(data, "announcements").slice(0, 6)} empty="No announcements have been published." render={(row) => <><b>{text(row.title)}</b><small>{text(row.audience)} · {formatDate(row.created_at)}</small><p>{text(row.body)}</p></>} /></Card></div><section className="scope-banner"><div><b>Current access: {human(role)}</b><p>{demoMode ? "Demo actions run only in this browser tab and do not test database security or shared-device access." : "Your visible records and available actions are controlled by your college membership and Supabase row-level security."}</p></div><span>{demoMode ? "Synthetic demo" : "R0 test environment"}</span></section></div>;
+  return <div className="portal-content"><section className="metric-row">{"students" in data && <Metric label="Active students" value={students.filter((row) => row.status === "active").length} note={`${students.length} total records`} />}{"applications" in data && <Metric label="Admissions queue" value={applications.filter((row) => !["accepted", "declined"].includes(String(row.status))).length} note={`${applications.length} applications`} />}{"assessment_results" in data && <Metric label="Competent outcomes" value={results.filter((row) => row.outcome === "competent").length} note={`${results.length} captured outcomes`} />}{"invoices" in data && <Metric label="Outstanding fees" value={money(outstanding)} note="Prototype finance ledger" />}</section><div className="dashboard-grid">{"timetable_entries" in data && <Card title="Upcoming classes" eyebrow="TIMETABLE"><RecordList rows={getRows(data, "timetable_entries").slice(0, 6)} empty="No classes have been scheduled." render={(row) => <><b>{text(row.title)}</b><small>{formatDate(row.session_date)} · {text(row.start_time)}–{text(row.end_time)} · {text(row.venue)}</small></>} /></Card>}{"announcements" in data && <Card title="Latest announcements" eyebrow="COMMUNICATIONS"><RecordList rows={getRows(data, "announcements").slice(0, 6)} empty="No announcements have been published." render={(row) => <><b>{text(row.title)}</b><small>{text(row.audience)} · {formatDate(row.created_at)}</small><p>{text(row.body)}</p></>} /></Card>}</div><section className="scope-banner"><div><b>Current access: {human(role)}</b><p>{demoMode ? "Demo actions run only in this browser tab and do not test database security or shared-device access." : "Your visible records and available actions are controlled by your college membership and Supabase row-level security."}</p></div><span>{demoMode ? "Synthetic demo" : "R0 test environment"}</span></section></div>;
 }
 
 function AdmissionsPanel(props: PanelProps) {
@@ -355,7 +351,7 @@ function EvidencePanel(props: PanelProps) {
       if (updateError) throw updateError; form.reset();
     }, "Moderation decision recorded.");
   }
-  return <div className="portal-content">{(canWrite || canModerate) && <div className="feature-grid two">{canWrite && <FormCard title="Upload POE or workplace evidence" intro="Private files are stored in Supabase Storage and governed by institution membership."><form onSubmit={(event) => void upload(event)}><SelectField label="Student" name="student_id" options={students} optionLabel={(row) => `${text(row.student_number)} · ${text(row.first_name)} ${text(row.last_name)}`} /><SelectField label="Assessment (optional)" name="assessment_id" options={assessments} optionLabel={(row) => text(row.title)} optional /><SelectField label="Evidence category" name="evidence_type" rawOptions={[["poe", "Portfolio of Evidence"], ["workplace", "Workplace evidence"], ["logbook", "Logbook"], ["assessment_support", "Assessment support"]]} /><Field label="Evidence title" name="title" /><label>File<input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx,.txt" required /></label><Submit busy={props.busy}>Upload evidence</Submit></form></FormCard>}{canModerate && <FormCard title="Record moderation" intro="Create a separate accountable moderation record for an assessment result."><form onSubmit={(event) => void moderate(event)}><SelectField label="Assessment result" name="assessment_result_id" options={results} optionLabel={(row) => `${lookupStudent(students, row.student_id)} · ${lookup(assessments, row.assessment_id)}`} /><SelectField label="Decision" name="decision" rawOptions={[["upheld", "Outcome upheld"], ["changed", "Outcome changed"], ["returned", "Returned to assessor"]]} /><TextArea label="Comments" name="comments" /><Submit busy={props.busy}>Save moderation</Submit></form></FormCard>}</div>}<div className="dashboard-grid"><Card title="Evidence register" eyebrow="POE & WORKPLACE"><RecordList rows={evidence} empty="No evidence files have been uploaded." render={(row) => <><div className="record-between"><b>{text(row.title)}</b><Status value={row.status} /></div><small>{lookupStudent(students, row.student_id)} · {text(row.file_name)}</small><div className="inline-actions"><button onClick={() => void download(row)}>Download</button>{academicManagers.has(props.role) && <><button onClick={() => void props.actions.update("evidence_documents", row.id, { status: "verified", reviewed_by: props.user.id, reviewed_at: new Date().toISOString() }, "Evidence verified.")}>Verify</button><button onClick={() => void props.actions.update("evidence_documents", row.id, { status: "returned", reviewed_by: props.user.id, reviewed_at: new Date().toISOString() }, "Evidence returned.")}>Return</button></>}</div></>} /></Card><Card title="Moderation history" eyebrow="QUALITY ASSURANCE"><RecordList rows={moderation} empty="No moderation decisions have been recorded." render={(row) => <><div className="record-between"><b>{lookup(results, row.assessment_result_id, "outcome")}</b><Status value={row.decision} /></div><small>{formatDate(row.moderated_at ?? row.created_at)} · {text(row.comments) || "No comments"}</small></>} /></Card></div></div>;
+  return <div className="portal-content">{(canWrite || canModerate) && <div className="feature-grid two">{canWrite && <FormCard title="Upload POE or workplace evidence" intro={props.demoMode ? "This is a simulated prototype. No real files are uploaded or stored." : "Use invented evidence files only in this connected test workspace."}><form onSubmit={(event) => void upload(event)}><SelectField label="Student" name="student_id" options={students} optionLabel={(row) => `${text(row.student_number)} · ${text(row.first_name)} ${text(row.last_name)}`} /><SelectField label="Assessment (optional)" name="assessment_id" options={assessments} optionLabel={(row) => text(row.title)} optional /><SelectField label="Evidence category" name="evidence_type" rawOptions={[["poe", "Portfolio of Evidence"], ["workplace", "Workplace evidence"], ["logbook", "Logbook"], ["assessment_support", "Assessment support"]]} /><Field label="Evidence title" name="title" /><label>File<input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx,.txt" required /></label><Submit busy={props.busy}>Upload evidence</Submit></form></FormCard>}{canModerate && <FormCard title="Record moderation" intro="Create a separate accountable moderation record for an assessment result."><form onSubmit={(event) => void moderate(event)}><SelectField label="Assessment result" name="assessment_result_id" options={results} optionLabel={(row) => `${lookupStudent(students, row.student_id)} · ${lookup(assessments, row.assessment_id)}`} /><SelectField label="Decision" name="decision" rawOptions={[["upheld", "Outcome upheld"], ["changed", "Outcome changed"], ["returned", "Returned to assessor"]]} /><TextArea label="Comments" name="comments" /><Submit busy={props.busy}>Save moderation</Submit></form></FormCard>}</div>}<div className="dashboard-grid"><Card title="Evidence register" eyebrow="POE & WORKPLACE"><RecordList rows={evidence} empty="No evidence files have been uploaded." render={(row) => <><div className="record-between"><b>{text(row.title)}</b><Status value={row.status} /></div><small>{lookupStudent(students, row.student_id)} · {text(row.file_name)}</small><div className="inline-actions"><button onClick={() => void download(row)}>Download</button>{academicManagers.has(props.role) && <><button onClick={() => void props.actions.update("evidence_documents", row.id, { status: "verified", reviewed_by: props.user.id, reviewed_at: new Date().toISOString() }, "Evidence verified.")}>Verify</button><button onClick={() => void props.actions.update("evidence_documents", row.id, { status: "returned", reviewed_by: props.user.id, reviewed_at: new Date().toISOString() }, "Evidence returned.")}>Return</button></>}</div></>} /></Card>{"moderation_records" in props.data && <Card title="Moderation history" eyebrow="QUALITY ASSURANCE"><RecordList rows={moderation} empty="No moderation decisions have been recorded." render={(row) => <><div className="record-between"><b>{lookup(results, row.assessment_result_id, "outcome")}</b><Status value={row.decision} /></div><small>{formatDate(row.moderated_at ?? row.created_at)} · {text(row.comments) || "No comments"}</small></>} /></Card>}</div></div>;
 }
 
 function FinancePanel(props: PanelProps) {
@@ -368,22 +364,80 @@ function CommunicationsPanel(props: PanelProps) {
   return <div className="portal-content">{canWrite && <div className="feature-grid two"><FormCard title="Publish an announcement" intro="Post an in-app notice to an authorised college audience."><form onSubmit={(event) => void formInsert(event, props.actions, "announcements", { status: "published" }, "Announcement published.")}><Field label="Title" name="title" /><SelectField label="Audience" name="audience" rawOptions={[["all", "Everyone"], ["staff", "Staff"], ["students", "Students"], ["finance", "Finance users"]]} /><TextArea label="Message" name="body" /><Submit busy={props.busy}>Publish announcement</Submit></form></FormCard>{canNotify && <FormCard title="Send a direct notification" intro="Deliver a private in-app notice to one authorised account."><form onSubmit={(event) => void formInsert(event, props.actions, "notifications", {}, "Direct notification sent.")}><SelectField label="Recipient" name="profile_id" options={members} optionValue={(row) => text(row.profile_id)} optionLabel={(row) => { const profile = (row.profiles ?? {}) as Row; return `${text(profile.full_name) || text(profile.email)} · ${human(row.role)}`; }} /><Field label="Title" name="title" /><TextArea label="Message" name="body" /><Submit busy={props.busy}>Send notification</Submit></form></FormCard>}</div>}<div className="dashboard-grid"><Card title="College noticeboard" eyebrow="COMMUNICATIONS"><RecordList rows={items} empty="No announcements have been published for your audience." render={(row) => <><div className="record-between"><b>{text(row.title)}</b><span className="audience-chip">{human(row.audience)}</span></div><p>{text(row.body)}</p><small>{formatDate(row.created_at)}</small></>} /></Card><Card title="My notifications" eyebrow="DIRECT MESSAGES"><RecordList rows={notifications} empty="You have no direct notifications." render={(row) => <><div className="record-between"><b>{text(row.title)}</b><Status value={row.read_at ? "read" : "unread"} /></div><p>{text(row.body)}</p><div className="inline-actions">{!row.read_at && <button onClick={() => void props.actions.update("notifications", row.id, { read_at: new Date().toISOString() }, "Notification marked as read.")}>Mark as read</button>}</div></>} /></Card></div></div>;
 }
 
+const csvReports = [
+  ["Student register", "students", "Core student records"],
+  ["Admissions pipeline", "applications", "Application statuses"],
+  ["Attendance register", "attendance_records", "Captured attendance"],
+  ["Assessment results", "assessment_results", "Marks and outcomes"],
+  ["Finance ledger", "invoices", "Invoices and balances"],
+  ["Audit history", "audit_logs", "Accountable changes"],
+] as const;
+
 function ReportsPanel(props: PanelProps) {
-  const students = getRows(props.data, "students"); const results = getRows(props.data, "assessment_results"); const assessments = getRows(props.data, "assessments");
-  function transcript(studentId: string) {
-    const student = students.find((row) => row.id === studentId); if (!student) return; const studentResults = results.filter((row) => row.student_id === studentId); const printable = window.open("", "_blank", "noopener,noreferrer"); if (!printable) return;
-    printable.document.write(`<title>EduBonke Academic Record</title><style>body{font-family:Arial;padding:40px;color:#132a32}h1{margin-bottom:4px}small{color:#607075}table{width:100%;border-collapse:collapse;margin-top:30px}th,td{text-align:left;padding:10px;border-bottom:1px solid #ccd6d3}.note{margin-top:35px;padding:15px;background:#fff5df}</style><h1>Academic progress record</h1><small>${escapeHtml(text(student.student_number))} · ${escapeHtml(`${text(student.first_name)} ${text(student.last_name)}`)}</small><table><thead><tr><th>Assessment</th><th>Outcome</th><th>Score</th><th>Moderation</th></tr></thead><tbody>${studentResults.map((row) => `<tr><td>${escapeHtml(lookup(assessments, row.assessment_id))}</td><td>${escapeHtml(human(row.outcome))}</td><td>${escapeHtml(text(row.score) || "—")}</td><td>${escapeHtml(human(row.moderation_status))}</td></tr>`).join("")}</tbody></table><p class="note">Software-generated prototype record. This is not an accredited certificate or regulator submission.</p>`); printable.document.close(); printable.print();
-  }
+  const students = getRows(props.data, "students");
+  const [studentId, setStudentId] = useState("");
+  const [preview, setPreview] = useState(false);
+  const generateButton = useRef<HTMLButtonElement>(null);
+  const restoreFocus = useRef(false);
+  const student = students.find(row => row.id === studentId);
+
+  useEffect(() => {
+    if (!preview && restoreFocus.current) {
+      generateButton.current?.focus();
+      restoreFocus.current = false;
+    }
+  }, [preview]);
+
   function downloadSnapshot() {
     const payload = { exported_at: new Date().toISOString(), institution_id: props.institutionId, scope: "currently authorised and loaded records", tables: props.data };
     downloadBlob(`edubonke-workspace-snapshot-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(payload, null, 2), "application/json");
   }
-  return <div className="portal-content"><section className="report-grid">{[["Student register", "students", "Core student records"], ["Admissions pipeline", "applications", "Application statuses"], ["Attendance register", "attendance_records", "Captured attendance"], ["Assessment results", "assessment_results", "Marks and outcomes"], ["Finance ledger", "invoices", "Invoices and balances"], ["Audit history", "audit_logs", "Accountable changes"]].map(([title, key, note]) => <article key={key}><span>CSV</span><h3>{title}</h3><p>{note}</p><b>{getRows(props.data, key).length} records</b><button onClick={() => { try { downloadCsv(`edubonke-${key}-${new Date().toISOString().slice(0, 10)}.csv`, getRows(props.data, key)); } catch { return; } }}>Download</button></article>)}</section><div className="dashboard-grid"><Card title="Student academic progress record" eyebrow="PRINTABLE REPORT"><div className="report-select"><select id="transcript-student" defaultValue=""><option value="" disabled>Select a student</option>{students.map((row) => <option value={text(row.id)} key={text(row.id)}>{text(row.student_number)} · {text(row.first_name)} {text(row.last_name)}</option>)}</select><button onClick={() => transcript((document.getElementById("transcript-student") as HTMLSelectElement)?.value)}>Generate printable record</button></div><p className="scope-note">Reports are operational outputs. They do not replace formal ETQA, QCTO, DHET, Umalusi or accredited certification processes.</p></Card><Card title="Workspace data snapshot" eyebrow="LOCAL JSON EXPORT"><p>Download the records this account is authorised to see and that are currently loaded in the prototype.</p><button className="secondary-action" onClick={downloadSnapshot}>Download JSON snapshot</button><p className="scope-note">This file can contain personal information. Store it securely. It is not a managed database backup.</p></Card></div></div>;
+
+  if (preview && student) {
+    return <AcademicRecord student={student} data={props.data} onBack={() => {
+      restoreFocus.current = true;
+      setPreview(false);
+    }} />;
+  }
+
+  return (
+    <div className="portal-content">
+      <section className="report-grid" aria-label="CSV registers">
+        {csvReports.filter(([, key]) => key in props.data).map(([title, key, note]) => (
+          <article key={key}>
+            <span>CSV</span><h2>{title}</h2><p>{note}</p><b>{getRows(props.data, key).length} records</b>
+            <button type="button" onClick={() => {
+              try { downloadCsv(`edubonke-${key}-${new Date().toISOString().slice(0, 10)}.csv`, getRows(props.data, key)); }
+              catch { return; }
+            }}>Download</button>
+          </article>
+        ))}
+      </section>
+      <div className="dashboard-grid">
+        {"assessment_results" in props.data && <Card title="Student academic progress record" eyebrow="PRINTABLE REPORT">
+          <form className="report-select" onSubmit={event => { event.preventDefault(); setPreview(true); }}>
+            <label htmlFor="transcript-student">Learner</label>
+            <select id="transcript-student" required value={studentId} onChange={event => setStudentId(event.target.value)}>
+              <option value="" disabled>Select a student</option>
+              {students.map(row => <option value={text(row.id)} key={text(row.id)}>{lookupStudent(students, row.id)}</option>)}
+            </select>
+            <button ref={generateButton} type="submit">Generate printable record</button>
+          </form>
+          <p className="scope-note">Reports are operational outputs. They do not replace formal ETQA, QCTO, DHET, Umalusi or accredited certification processes.</p>
+        </Card>}
+        <Card title="Workspace data snapshot" eyebrow="LOCAL JSON EXPORT">
+          <p>Download the records available to this role in the current workspace.</p>
+          <button className="secondary-action" type="button" onClick={downloadSnapshot}>Download JSON snapshot</button>
+          <p className="scope-note">Store downloaded records securely. Use the snapshot for local review.</p>
+        </Card>
+      </div>
+    </div>
+  );
 }
 
 function SupportPanel(props: PanelProps) {
   const tickets = getRows(props.data, "support_tickets"); const comments = getRows(props.data, "support_ticket_comments");
-  return <div className="portal-content"><div className="feature-grid two"><FormCard title="Log a support request" intro="Report a system, data or training issue for follow-up."><form onSubmit={(event) => void formInsert(event, props.actions, "support_tickets", { status: "open", priority: "normal" }, "Support request logged.")}><Field label="Subject" name="subject" /><SelectField label="Category" name="category" rawOptions={[["technical", "Technical"], ["data", "Data"], ["training", "Training"], ["billing", "Billing"], ["privacy", "Privacy"], ["other", "Other"]]} /><SelectField label="Priority" name="priority" rawOptions={[["low", "Low"], ["normal", "Normal"], ["high", "High"], ["critical", "Critical"]]} /><TextArea label="Description" name="description" /><Submit busy={props.busy}>Submit request</Submit></form></FormCard><FormCard title="Add a ticket comment" intro="Keep follow-up communication attached to the correct support request."><form onSubmit={(event) => void formInsert(event, props.actions, "support_ticket_comments", {}, "Comment added to the support ticket.")}><SelectField label="Ticket" name="ticket_id" options={tickets} optionLabel={(row) => `${text(row.ticket_number)} · ${text(row.subject)}`} /><TextArea label="Comment" name="body" /><Submit busy={props.busy}>Add comment</Submit></form></FormCard></div><div className="dashboard-grid"><Card title="Support queue" eyebrow="HELP DESK"><RecordList rows={tickets} empty="No support requests have been logged." render={(row) => <><div className="record-between"><b>{text(row.ticket_number)} · {text(row.subject)}</b><Status value={row.status} /></div><small>{human(row.category)} · {human(row.priority)} · {formatDate(row.created_at)}</small>{academicManagers.has(props.role) && <div className="inline-actions"><button onClick={() => void props.actions.update("support_tickets", row.id, { status: "in_progress" }, "Ticket moved to in progress.")}>Start</button><button onClick={() => void props.actions.update("support_tickets", row.id, { status: "resolved", resolved_at: new Date().toISOString() }, "Ticket resolved.")}>Resolve</button></div>}</>} /></Card><Card title="Latest support comments" eyebrow="CONVERSATION"><RecordList rows={comments.slice(0, 50)} empty="No ticket comments have been added." render={(row) => <><b>{lookup(tickets, row.ticket_id, "ticket_number")}</b><p>{text(row.body)}</p><small>{formatDate(row.created_at)}</small></>} /></Card></div></div>;
+  return <div className="portal-content"><div className="feature-grid two"><FormCard title="Log a support request" intro="Report a system, data or training issue for follow-up."><form onSubmit={(event) => void formInsert(event, props.actions, "support_tickets", { status: "open", priority: "normal", created_by: props.user.id }, "Support request logged.")}><Field label="Subject" name="subject" /><SelectField label="Category" name="category" rawOptions={[["technical", "Technical"], ["data", "Data"], ["training", "Training"], ["billing", "Billing"], ["privacy", "Privacy"], ["other", "Other"]]} /><SelectField label="Priority" name="priority" rawOptions={[["low", "Low"], ["normal", "Normal"], ["high", "High"], ["critical", "Critical"]]} /><TextArea label="Description" name="description" /><Submit busy={props.busy}>Submit request</Submit></form></FormCard><FormCard title="Add a ticket comment" intro="Keep follow-up communication attached to the correct support request."><form onSubmit={(event) => void formInsert(event, props.actions, "support_ticket_comments", { created_by: props.user.id }, "Comment added to the support ticket.")}><SelectField label="Ticket" name="ticket_id" options={tickets} optionLabel={(row) => `${text(row.ticket_number)} · ${text(row.subject)}`} /><TextArea label="Comment" name="body" /><Submit busy={props.busy}>Add comment</Submit></form></FormCard></div><div className="dashboard-grid"><Card title="Support queue" eyebrow="HELP DESK"><RecordList rows={tickets} empty="No support requests have been logged." render={(row) => <><div className="record-between"><b>{text(row.ticket_number)} · {text(row.subject)}</b><Status value={row.status} /></div><small>{human(row.category)} · {human(row.priority)} · {formatDate(row.created_at)}</small>{academicManagers.has(props.role) && <div className="inline-actions"><button onClick={() => void props.actions.update("support_tickets", row.id, { status: "in_progress" }, "Ticket moved to in progress.")}>Start</button><button onClick={() => void props.actions.update("support_tickets", row.id, { status: "resolved", resolved_at: new Date().toISOString() }, "Ticket resolved.")}>Resolve</button></div>}</>} /></Card><Card title="Latest support comments" eyebrow="CONVERSATION"><RecordList rows={comments.slice(0, 50)} empty="No ticket comments have been added." render={(row) => <><b>{lookup(tickets, row.ticket_id, "ticket_number")}</b><p>{text(row.body)}</p><small>{formatDate(row.created_at)}</small></>} /></Card></div></div>;
 }
 
 function PrivacyPanel(props: PanelProps) {
@@ -432,11 +486,13 @@ function Onboarding({ user, busy, notice, setBusy, setNotice, onComplete, onSign
   return <main className="onboarding-page"><header><Link className="brand" href="/" aria-label="EduBonke home"><BrandLogo /></Link><button onClick={() => void onSignOut()}>Sign out</button></header><section><p className="eyebrow-text">Workspace onboarding</p><h1>Connect your account to a college.</h1><p>Create a synthetic test workspace if you are the college administrator, or join with a code issued by an administrator.</p>{notice && <div className={`portal-notice ${notice.type}`}>{notice.text}</div>}<div className="onboarding-grid"><FormCard title="Create a test college" intro="You will become the first college administrator."><form onSubmit={(event) => { event.preventDefault(); const values = valuesFrom(event.currentTarget); void execute(async () => { const { error } = await getSupabase().rpc("create_institution_with_owner", { p_name: values.name, p_registration_number: values.registration_number || null }); if (error) throw error; }); }}><Field label="College name" name="name" /><Field label="Registration reference (optional)" name="registration_number" optional /><Submit busy={busy}>Create workspace</Submit></form></FormCard><FormCard title="Join an existing college" intro="Enter the single-use code supplied to your email address."><form onSubmit={(event) => { event.preventDefault(); const code = String(new FormData(event.currentTarget).get("code") ?? "").trim().toUpperCase(); void execute(async () => { const { error } = await getSupabase().rpc("join_institution_by_code", { p_code: code }); if (error) throw error; }); }}><Field label="Invite code" name="code" /><Submit busy={busy}>Join workspace</Submit></form></FormCard></div><small>Signed in as {user.email}</small></section></main>;
 }
 
-function ConfigurationRequired() { return <main className="configuration-page"><div><BrandMark className="configuration-brand-mark" title="EduBonke" /><p className="eyebrow-text">One-time setup</p><h1>Connect the free Supabase backend.</h1><p>The frontend is ready, but authentication and shared data stay disabled until the repository is connected to a Supabase Free project.</p><ol><li>Create a Supabase Free project.</li><li>Run the included SQL migration.</li><li>Add the project URL and anonymous key to GitHub repository secrets.</li><li>Run the GitHub Pages workflow.</li></ol><p>Follow <code>docs/ZERO_COST_SETUP.md</code> exactly.</p><Link className="button" href="/">Return to the public site</Link></div></main>; }
+function ConfigurationRequired() {
+  return <main className="configuration-page"><div><BrandMark className="configuration-brand-mark" title="EduBonke" /><h1>Explore the public demo</h1><p>Use a temporary student or staff workspace with invented records. No account is required.</p><Link className="button" href="/demo">Choose a demo</Link></div></main>;
+}
 function LoadingScreen({ text: label, compact = false }: { text: string; compact?: boolean }) { return <div className={compact ? "loading-screen compact" : "loading-screen"}><span /><p>{label}</p></div>; }
 function Metric({ label, value, note }: { label: string; value: React.ReactNode; note: string }) { return <article><small>{label}</small><strong>{value}</strong><span>{note}</span></article>; }
 function Card({ title, eyebrow, children, wide = false }: { title: string; eyebrow: string; children: React.ReactNode; wide?: boolean }) { return <section className={`portal-card ${wide ? "wide" : ""}`}><div className="card-heading"><div><small>{eyebrow}</small><h2>{title}</h2></div></div>{children}</section>; }
-function FormCard({ title, intro, children }: { title: string; intro: string; children: React.ReactNode }) { return <section className="portal-card form-card"><small>PROTECTED ACTION</small><h2>{title}</h2><p>{intro}</p>{children}</section>; }
+function FormCard({ title, intro, children }: { title: string; intro: string; children: React.ReactNode }) { return <section className="portal-card form-card"><small>WORKSPACE ACTION</small><h2>{title}</h2><p>{intro}</p>{children}</section>; }
 function Pair({ children }: { children: React.ReactNode }) { return <div className="form-pair">{children}</div>; }
 function Field({ label, name, type = "text", placeholder, optional = false, step }: { label: string; name: string; type?: string; placeholder?: string; optional?: boolean; step?: string }) { return <label>{label}<input name={name} type={type} placeholder={placeholder} required={!optional} step={step} /></label>; }
 function TextArea({ label, name }: { label: string; name: string }) { return <label>{label}<textarea name={name} rows={3} /></label>; }
@@ -458,5 +514,4 @@ function lookup(rows: Row[], id: unknown, field = "title") { const row = rows.fi
 function lookupStudent(rows: Row[], id: unknown) { const row = rows.find((item) => item.id === id); return row ? `${text(row.student_number)} · ${text(row.first_name)} ${text(row.last_name)}` : "Student record"; }
 function message(error: unknown) { return error instanceof Error ? error.message : typeof error === "object" && error && "message" in error ? String(error.message) : "The request could not be completed."; }
 function initials(value: string) { return value.split(/\s|@/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join(""); }
-function escapeHtml(value: string) { return value.replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character] ?? character)); }
 function navIcon(key: string) { return ({ overview: "⌂", admissions: "↗", students: "◎", academics: "▦", timetable: "□", attendance: "✓", assessments: "◇", evidence: "▣", finance: "R", communications: "◌", reports: "▤", support: "?", privacy: "◈", administration: "⚙" } as Record<string, string>)[key] ?? "•"; }

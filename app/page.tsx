@@ -8,7 +8,7 @@ const modules = [
   ["Students & enrolments", "Manage student profiles, status history, documents, classes and study periods."],
   ["Attendance & timetables", "Share upcoming classes and capture accountable session-level attendance."],
   ["Assessments", "Plan formative, summative and practical work and record competence outcomes."],
-  ["POE & moderation", "Store protected evidence, track moderation decisions and retain accountable metadata."],
+  ["POE & moderation", "Link sample evidence references to assessments and track moderation decisions."],
   ["Finance", "Track rand-denominated invoices, payments, balances and funding administration."],
   ["Communication", "Publish college notices and role-specific in-app notifications."],
   ["Reports", "Export operational registers and generate printable academic progress records."],
@@ -36,14 +36,14 @@ export default function Home() {
       <section className="hero" aria-labelledby="hero-title">
         <div className="hero-copy">
           <div className="eyebrow"><span /> South African college administration</div>
-          <h1 id="hero-title">One secure workspace for every learner journey.</h1>
+          <h1 id="hero-title">Track each learner from admission to assessment.</h1>
           <p>
             EduBonke connects admission, enrolment, delivery, assessment, POE evidence,
             reporting and privacy workflows for South African private colleges.
           </p>
           <div className="hero-actions">
             <Link className="button" href="/demo">Explore with dummy data</Link>
-            <Link className="button button-secondary" href="/login">Open connected portal</Link>
+            <a className="button button-secondary" href="#pilot">Explore the pilot</a>
           </div>
           <p className="prototype-note">The demo needs no account or backend · R0 prototype · Synthetic data only</p>
         </div>
@@ -52,7 +52,7 @@ export default function Home() {
           <div className="preview-topbar">
             <BrandMark className="preview-logo" title="EduBonke" />
             <div><b>Mhlabeni Skills College — Demo</b><small>Johannesburg campus</small></div>
-            <span className="status-chip">Protected</span>
+            <span className="status-chip">Sample dashboard</span>
           </div>
           <div className="preview-heading">
             <div><small>Friday, 14 August</small><h2>Good morning, Nomsa</h2></div>
@@ -79,7 +79,7 @@ export default function Home() {
       </section>
 
       <section className="trust-strip" aria-label="Prototype principles">
-        <span>Shared across devices</span><span>Role-based access</span><span>Auditable changes</span><span>POPIA-aware workflows</span>
+        <span>Temporary browser workspace</span><span>Staff role previews</span><span>Sample audit history</span><span>POPIA-aware workflows</span>
       </section>
 
       <section className="section" id="platform" aria-labelledby="platform-title">
@@ -101,14 +101,14 @@ export default function Home() {
         <div>
           <p className="eyebrow-text light">Built around responsible access</p>
           <h2 id="security-title">Privacy is part of the workflow, not a footer.</h2>
-          <p>Every institution receives a separate workspace. PostgreSQL row-level policies enforce tenant and role boundaries before protected data is returned.</p>
+          <p>Explore a fictional college in your own browser tab. Role previews show which records each staff member works with. Refresh or reset the demo to clear changes.</p>
         </div>
         <ul>
-          <li><b>Authentication</b><span>Supabase Auth links protected actions to a verified account.</span></li>
-          <li><b>Minimum access</b><span>Eight college roles receive different record and action permissions.</span></li>
+          <li><b>Demo access</b><span>Open the student or staff workspace without an account.</span></li>
+          <li><b>Minimum access</b><span>Switch between six staff roles to compare the summaries and reports each can use.</span></li>
           <li><b>Data-subject requests</b><span>Access, correction and deletion requests can be logged and tracked.</span></li>
-          <li><b>Protected evidence</b><span>POE files are kept separately from searchable records with institution-level access checks.</span></li>
-          <li><b>Accountability</b><span>Database triggers retain an institution-scoped audit history of important changes.</span></li>
+          <li><b>Evidence references</b><span>Practise logging a file name and assessment reference. Selected files stay on your device.</span></li>
+          <li><b>Accountability</b><span>The demo keeps a temporary history of changes made in the current staff workspace.</span></li>
         </ul>
       </section>
 

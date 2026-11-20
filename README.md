@@ -36,10 +36,10 @@ Neither demo needs an account, Supabase project or environment variables. Both l
 - Responsive installable PWA shell for desktop, tablet and mobile
 - Separate browser-only student and staff/admin demos with clearly labelled synthetic workspaces
 
-## R0 architecture
+## Public demo and optional connected architecture
 
 - **Frontend:** Next.js static export hosted by GitHub Pages
-- **Authentication:** Supabase Auth
+- **Optional connected portal:** Supabase Auth
 - **Database:** Supabase PostgreSQL
 - **Tenant security:** PostgreSQL row-level security policies
 - **Private documents:** Supabase Storage with signed downloads
@@ -49,7 +49,7 @@ No ChatGPT hosting, D1, R2, Vercel or paid service is required for prototype tes
 
 ## Set up the working prototype
 
-Follow [`docs/ZERO_COST_SETUP.md`](docs/ZERO_COST_SETUP.md). The one-time setup creates a Supabase project, runs the supplied migration, adds two GitHub secrets and enables GitHub Pages.
+Follow [`docs/ZERO_COST_SETUP.md`](docs/ZERO_COST_SETUP.md). The public Pages workflow builds the synthetic demo without backend credentials. Configure Supabase separately for a local or separately hosted connected portal.
 
 ## Local development
 

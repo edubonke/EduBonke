@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { NavigationToggle, useNavigationDisclosure } from "../../navigation-disclosure";
 import { useMemo, useState } from "react";
 import BrandLogo from "../../brand";
+import { readEvidenceFile } from "../../../lib/evidence-file";
 import { createDemoWorkspace } from "../../../lib/demo-data";
 import { formatDate, human, money, type WorkspaceData } from "../../../lib/platform";
 
@@ -29,7 +31,8 @@ export default function StudentDemoClient() {
   const [data, setData] = useState<WorkspaceData>(() => createDemoWorkspace());
   const [view, setView] = useState<StudentView>("dashboard");
   const [notice, setNotice] = useState("");
-  const [mobileNav, setMobileNav] = useState(false);
+  const menu = useNavigationDisclosure("workspace-navigation");
+  const [fileError, setFileError] = useState("");
   const [readAnnouncements, setReadAnnouncements] = useState<string[]>([]);
 
   const student = rows(data, "students").find((row) => row.id === studentId) ?? {};
@@ -56,6 +59,7 @@ export default function StudentDemoClient() {
     setData(createDemoWorkspace());
     setView("dashboard");
     setReadAnnouncements([]);
+    setFileError("");
     setNotice("The student demonstration has been reset.");
   }
 
@@ -84,7 +88,10 @@ export default function StudentDemoClient() {
     event.preventDefault();
     const form = event.currentTarget;
     const formData = new FormData(form);
-    const file = formData.get("file") as File;
+    const selected = readEvidenceFile(formData);
+    if ("error" in selected) { setFileError(selected.error); return; }
+    setFileError("");
+    const { file } = selected;
     const next: Row = {
       id: crypto.randomUUID(),
       institution_id: "demo-mhlabeni-college",
@@ -168,11 +175,13 @@ export default function StudentDemoClient() {
     if (view === "poe") return (
       <div className="portal-content two-column">
         <StudentCard title="Submit POE evidence" eyebrow="STUDENT ACTION" form>
-          <p className="student-form-intro">Choose a demonstration file to see the submission workflow. No file leaves your device.</p>
+          <p className="student-form-intro">This is a simulated prototype. No real files are uploaded or stored.</p>
           <form className="student-action-form" onSubmit={addEvidence}>
             <label>Assessment<select name="assessment_id" defaultValue="" required><option value="">Select an assessment</option>{assessments.map((row) => <option key={text(row.id)} value={text(row.id)}>{text(row.title)}</option>)}</select></label>
             <label>Evidence title<input name="title" required placeholder="Example: Hardware diagnostic checklist" /></label>
-            <label>Choose file<input name="file" type="file" required /></label>
+            <label>Choose file<input name="file" type="file" required aria-invalid={Boolean(fileError)}
+              aria-describedby={fileError ? "student-file-error" : undefined} onChange={() => setFileError("")} /></label>
+            {fileError && <p className="inline-error" id="student-file-error" role="alert">{fileError}</p>}
             <button className="primary-action">Add demonstration evidence</button>
           </form>
         </StudentCard>
@@ -203,20 +212,24 @@ export default function StudentDemoClient() {
   const currentLabel = studentNavigation.find(([key]) => key === view)?.[1] ?? "My dashboard";
 
   return (
-    <main className="portal-shell student-demo-shell">
-      <aside className={mobileNav ? "portal-sidebar open" : "portal-sidebar"}>
+    <div className="portal-shell student-demo-shell">
+      <a className="skip-link" href="#workspace-content">Skip to workspace</a>
+      <aside id={menu.id} className={menu.open ? "portal-sidebar open" : "portal-sidebar"}>
+        <button type="button" className="drawer-close" onClick={() => menu.close()}>Close navigation</button>
         <BrandLogo className="portal-brand" inverse subtitle="Student Demo" />
         <div className="workspace-card"><small>MY COLLEGE</small><b>Mhlabeni Skills College — Demo</b><span>{text(student.student_number)} · Active student</span></div>
-        <nav>{studentNavigation.map(([key, label, icon]) => <button key={key} className={view === key ? "active" : ""} onClick={() => { setView(key); setMobileNav(false); }}><span>{icon}</span>{label}</button>)}</nav>
+        <nav aria-label="Student workspace">{studentNavigation.map(([key, label, icon]) => <button key={key} aria-current={view === key ? "page" : undefined} className={view === key ? "active" : ""} onClick={() => { setView(key); if (menu.open) menu.close(); }}><span>{icon}</span>{label}</button>)}</nav>
         <div className="sidebar-footer"><Link href="/demo">Switch demo</Link><button onClick={resetDemo}>Reset demo</button></div>
       </aside>
-      <section className="portal-main">
-        <header className="portal-topbar"><button className="mobile-menu" onClick={() => setMobileNav((value) => !value)} aria-label="Toggle navigation">☰</button><div><small>Student demo · {currentLabel}</small><h1>{view === "dashboard" ? `Welcome, ${text(student.first_name)}` : currentLabel}</h1></div><div className="account-chip"><span>TM</span><div><b>Thabo Mokoena</b><small>Student · {text(student.student_number)}</small></div></div></header>
+      <div className="portal-main">
+        <header className="portal-topbar"><NavigationToggle menu={menu} label="Workspace navigation" /><div><small>Student demo · {currentLabel}</small><h1>{view === "dashboard" ? `Welcome, ${text(student.first_name)}` : currentLabel}</h1></div><div className="account-chip"><span>TM</span><div><b>Thabo Mokoena</b><small>Student · {text(student.student_number)}</small></div></div></header>
+        <main id="workspace-content" tabIndex={-1}>
         <div className="demo-mode-banner"><b>Student demonstration</b><span>Only Thabo’s invented learner record is shown. Changes remain in this browser session.</span><Link href="/demo">Choose another demo</Link></div>
         {notice && <div className="portal-notice success" role="status"><span>✓</span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss message">×</button></div>}
         {renderContent()}
-      </section>
-    </main>
+        </main>
+      </div>
+    </div>
   );
 }
 

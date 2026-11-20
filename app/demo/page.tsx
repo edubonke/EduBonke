@@ -31,11 +31,12 @@ const demos = [
 
 export default function DemoPage() {
   return (
-    <main className="demo-choice-page">
+    <div className="demo-choice-page">
       <header>
         <Link href="/" aria-label="EduBonke home"><BrandLogo /></Link>
         <Link className="demo-back-link" href="/">Return to the public site</Link>
       </header>
+      <main>
       <section className="demo-choice-intro">
         <p className="eyebrow-text">Interactive prototype</p>
         <h1>Choose whose EduBonke experience you want to explore.</h1>
@@ -57,6 +58,7 @@ export default function DemoPage() {
         <b>Synthetic demonstration only</b>
         <span>No account is required. No personal information, uploaded file or form entry leaves this browser session.</span>
       </aside>
-    </main>
+      </main>
+    </div>
   );
 }

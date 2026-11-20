@@ -107,6 +107,8 @@
 .report-grid h2 { margin: 22px 0 8px; font-size: 16px; }
 .report-grid p { min-height: 34px; margin: 0; color: #697b7e; font-size: 12px; line-height: 1.5; }
 .report-grid b { margin-top: 17px; font-size: 12px; }
+.invoice-select { display: grid; gap: 4px; margin-top: 8px; font-size: 12px; }
+.invoice-select select { min-width: 0; min-height: 40px; width: 100%; }
 .report-grid button { min-height: 38px; margin-top: 16px; border: 1px solid #087f75; border-radius: 9px; background: white; color: #087f75; font-size: 12px; font-weight: 700; cursor: pointer; }
 .report-select { display: flex; gap: 10px; padding-top: 18px; }
 .report-select button { min-height: 43px; }

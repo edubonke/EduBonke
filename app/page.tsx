@@ -18,6 +18,10 @@ const modules = [
 ] as const;
 
 export default function Home() {
+  const pilotEmail = process.env.NEXT_PUBLIC_PILOT_EMAIL?.trim();
+  const pilotUrl = pilotEmail
+    ? `mailto:${pilotEmail}?subject=EduBonke%20college%20pilot%20request`
+    : "https://github.com/edubonke/EduBonke/issues/new?template=pilot-request.yml";
   return (
     <div className="landing-shell">
       <a className="skip-link" href="#main-content">Skip to content</a>
@@ -118,9 +122,13 @@ export default function Home() {
           <h2 id="pilot-title">Designed to learn before live data is introduced.</h2>
         </div>
         <div className="pilot-steps">
-          <article><b>1</b><h3>Create a test workspace</h3><p>An authorised college representative creates the institution and can issue email-bound invite codes.</p></article>
-          <article><b>2</b><h3>Invite the pilot team</h3><p>Selected staff join from their own devices and receive only the permissions required for testing.</p></article>
+          <article><b>1</b><h3>Create a test workspace</h3><p>Choose one campus and one workflow to test with invented learner records.</p></article>
+          <article><b>2</b><h3>Invite the pilot team</h3><p>Invite a registrar, assessor and moderator to try their role in the demonstration.</p></article>
           <article><b>3</b><h3>Measure the workflow</h3><p>The pilot records completion time, errors, support needs and the decision to proceed, revise or stop.</p></article>
+        </div>
+        <div className="pilot-request">
+          <a className="button" href={pilotUrl}>Request a Pilot</a>
+          <p>{pilotEmail ? "Opens an email to the EduBonke team." : "Opens a public GitHub form. Sign in to request a pilot. Share only general workflow information."}</p>
         </div>
       </section>
 

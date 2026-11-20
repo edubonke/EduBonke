@@ -1,0 +1,25 @@
+name: Request a college pilot
+description: Ask the EduBonke maintainers about a guided demonstration with invented records.
+title: "College pilot request"
+body:
+  - type: markdown
+    attributes:
+      value: This request and the reply are public. Use only general workflow information. Please leave out names, email addresses and learner records.
+  - type: dropdown
+    id: workflow
+    attributes:
+      label: Which workflow would you like to evaluate?
+      options:
+        - Admissions and enrolment
+        - Evidence, assessment and moderation
+        - Timetables and attendance
+        - Finance and reporting
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: What would make the pilot useful for your college?
+      placeholder: For example, compare the time needed to prepare one synthetic learner's progress record.
+    validations:
+      required: true

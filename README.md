@@ -17,6 +17,8 @@ The demo selector provides two separate experiences:
 
 Neither demo needs an account, Supabase project or environment variables. Both load an invented college, people and operational records in the browser. Demonstration changes disappear after a refresh or **Reset demo**. The demos do not prove authentication, database security or cross-device sharing; use the connected portal for those tests.
 
+The **Request a Pilot** button opens the repository’s public pilot request form. To use an institutional mailbox instead, set the Actions repository variable `EDUBONKE_PILOT_EMAIL` and rebuild Pages. Local builds accept `NEXT_PUBLIC_PILOT_EMAIL`.
+
 ## Functional areas
 
 - Multi-college workspaces with row-level tenant isolation

@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
+    env:
+      NEXT_PUBLIC_PILOT_EMAIL: ${{ vars.EDUBONKE_PILOT_EMAIL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
